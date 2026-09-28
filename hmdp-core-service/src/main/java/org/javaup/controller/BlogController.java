@@ -36,11 +36,13 @@ public class BlogController {
     public Result saveBlog(@RequestBody Blog blog) {
         return blogService.saveBlog(blog);
     }
+    // 方法功能：保存博客并推送到粉丝收件箱。
 
     @PutMapping("/like/{id}")
     public Result likeBlog(@PathVariable("id") Long id) {
         return blogService.likeBlog(id);
     }
+    // 方法功能：切换当前用户对博客的点赞状态并同步点赞计数。
 
     @GetMapping("/of/me")
     public Result queryMyBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
@@ -53,21 +55,25 @@ public class BlogController {
         List<Blog> records = page.getRecords();
         return Result.ok(records);
     }
+    // 方法功能：查询 my blog 相关数据并返回结果。
 
     @GetMapping("/hot")
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
         return blogService.queryHotBlog(current);
     }
+    // 方法功能：分页查询热门博客并补充用户和点赞状态。
 
     @GetMapping("/{id}")
     public Result queryBlogById(@PathVariable("id") Long id) {
         return blogService.queryBlogById(id);
     }
+    // 方法功能：按 ID 查询博客详情并补充作者与点赞状态。
 
     @GetMapping("/likes/{id}")
     public Result queryBlogLikes(@PathVariable("id") Long id) {
         return blogService.queryBlogLikes(id);
     }
+    // 方法功能：查询指定博客最近点赞用户列表。
 
     @GetMapping("/of/user")
     public Result queryBlogByUserId(
@@ -80,10 +86,12 @@ public class BlogController {
         List<Blog> records = page.getRecords();
         return Result.ok(records);
     }
+    // 方法功能：查询 blog by user id 相关数据并返回结果。
 
     @GetMapping("/of/follow")
     public Result queryBlogOfFollow(
             @RequestParam("lastId") Long max, @RequestParam(value = "offset", defaultValue = "0") Integer offset){
         return blogService.queryBlogOfFollow(max, offset);
     }
+    // 方法功能：滚动分页查询关注用户发布的博客动态。
 }

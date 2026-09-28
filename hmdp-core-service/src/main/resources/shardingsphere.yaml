@@ -1,17 +1,8 @@
-mode:
-  type: Standalone
-  repository:
-    type: JDBC
-    props:
-      provider: H2
-      jdbc_url: jdbc:h2:mem:hmdp_config;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false;MODE=MYSQL
-      username: sa
-
 dataSources: 
   ds_0:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/hmdp_0?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&autoReconnect=true&allowPublicKeyRetrieval=true&useSSL=false
+    jdbcUrl: jdbc:mysql://127.0.0.1:3306/hmdp_0?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&autoReconnect=true
     username: root
     password: root
     hikari:
@@ -26,7 +17,7 @@ dataSources:
   ds_1:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/hmdp_1?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&autoReconnect=true&allowPublicKeyRetrieval=true&useSSL=false
+    jdbcUrl: jdbc:mysql://127.0.0.1:3306/hmdp_1?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&connectionTimeZone=Asia/Shanghai&forceConnectionTimeZoneToSession=true&autoReconnect=true
     username: root
     password: root
     hikari:
@@ -40,18 +31,6 @@ dataSources:
       validation-timeout: 5000            # 连接验证超时时间(5秒)
     
 rules:
-  - !TRANSACTION
-    defaultType: XA
-    providerType: Atomikos
-  - !BROADCAST
-    tables:
-      - tb_blog
-      - tb_blog_comments
-      - tb_follow
-      - tb_rollback_failure_log
-      - tb_shop
-      - tb_shop_type
-      - tb_sign
   - !SHARDING
     tables:
       tb_seckill_voucher:
@@ -108,7 +87,7 @@ rules:
         actualDataNodes: ds_${0..1}.tb_voucher_order_${0..1}
         databaseStrategy:
           standard:
-            shardingColumn: user_id
+            shardingColumn: voucher_id
             shardingAlgorithmName: databaseVoucherOrderModModel
         tableStrategy:
           standard:
@@ -128,76 +107,179 @@ rules:
         actualDataNodes: ds_${0..1}.tb_voucher_reconcile_log_${0..1}
         databaseStrategy:
           standard:
-            shardingColumn: order_id
+            shardingColumn: voucher_id
             shardingAlgorithmName: databaseVoucherReconcileLogModModel
         tableStrategy:
           standard:
-            shardingColumn: order_id
+            shardingColumn: voucher_id
             shardingAlgorithmName: tableVoucherReconcileLogModModel
+      tb_seckill_request:
+        actualDataNodes: ds_${0..1}.tb_seckill_request_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillRequestV2
+      tb_seckill_active_purchase:
+        actualDataNodes: ds_${0..1}.tb_seckill_active_purchase_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillActivePurchaseV2
+      tb_seckill_operation:
+        actualDataNodes: ds_${0..1}.tb_seckill_operation_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillOperationV2
+      tb_seckill_outbox:
+        actualDataNodes: ds_${0..1}.tb_seckill_outbox_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillOutboxV2
+      tb_seckill_subscription:
+        actualDataNodes: ds_${0..1}.tb_seckill_subscription_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillSubscriptionV2
+      tb_seckill_recovery:
+        actualDataNodes: ds_${0..1}.tb_seckill_recovery_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillRecoveryV2
+      tb_seckill_notification:
+        actualDataNodes: ds_${0..1}.tb_seckill_notification_${0..1}
+        databaseStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: databaseSeckillVoucherModModel
+        tableStrategy:
+          standard:
+            shardingColumn: voucher_id
+            shardingAlgorithmName: tableSeckillNotificationV2
+    bindingTables:
+      - tb_voucher,tb_seckill_voucher,tb_voucher_order,tb_voucher_reconcile_log,tb_seckill_request,tb_seckill_active_purchase,tb_seckill_operation,tb_seckill_outbox,tb_seckill_subscription,tb_seckill_recovery,tb_seckill_notification
+    broadcastTables:
+      - tb_blog,tb_blog_comments,tb_follow,tb_rollback_failure_log,tb_shop,tb_shop_type,tb_sign
     shardingAlgorithms:
       databaseSeckillVoucherModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${voucher_id % 2}
+          sharding-count: 2
       tableSeckillVoucherModModel:
         type: INLINE
         props:
           algorithm-expression: tb_seckill_voucher_${voucher_id.intdiv(2) % 2}
+          allow-range-query-with-inline-sharding: true
       databaseUserModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${id % 2}
+          sharding-count: 2
       tableUserModModel:
         type: INLINE
         props:
           algorithm-expression: tb_user_${id.intdiv(2) % 2}
       databaseUserInfoModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${user_id % 2}
+          sharding-count: 2
       tableUserInfoModModel:
         type: INLINE
         props:
           algorithm-expression: tb_user_info_${user_id.intdiv(2) % 2}
       databaseUserPhoneHashModModel:
-        type: INLINE
+        type: HASH_MOD
         props:
-          algorithm-expression: ds_${Math.abs(phone.hashCode()) % 2}
+          sharding-count: 2
       tableUserPhoneHashModModel:
         type: INLINE
         props:
           algorithm-expression: tb_user_phone_${Math.abs(phone.hashCode()).intdiv(2) % 2}
       databaseVoucherModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${id % 2}
+          sharding-count: 2
       tableVoucherModModel:
         type: INLINE
         props:
           algorithm-expression: tb_voucher_${id.intdiv(2) % 2}
       databaseVoucherOrderModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${user_id % 2}
+          sharding-count: 2
       tableVoucherOrderModModel:
         type: INLINE
         props:
-          algorithm-expression: tb_voucher_order_${voucher_id % 2}
+          algorithm-expression: tb_voucher_order_${voucher_id.intdiv(2) % 2}
       databaseVoucherOrderRouterModModel:
-        type: INLINE
+        type: HASH_MOD
         props:
-          algorithm-expression: ds_${Math.abs(order_id.hashCode()) % 2}
+          sharding-count: 2
       tableVoucherOrderRouterModModel:
         type: INLINE
         props:
           algorithm-expression: tb_voucher_order_router_${order_id.intdiv(2) % 2}
       databaseVoucherReconcileLogModModel:
-        type: INLINE
+        type: MOD
         props:
-          algorithm-expression: ds_${Math.abs(order_id.hashCode()) % 2}
+          sharding-count: 2
       tableVoucherReconcileLogModModel:
         type: INLINE
         props:
-          algorithm-expression: tb_voucher_reconcile_log_${order_id.intdiv(2) % 2}
+          algorithm-expression: tb_voucher_reconcile_log_${voucher_id.intdiv(2) % 2}
+      tableSeckillRequestV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_request_${voucher_id.intdiv(2) % 2}
+      tableSeckillActivePurchaseV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_active_purchase_${voucher_id.intdiv(2) % 2}
+      tableSeckillOperationV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_operation_${voucher_id.intdiv(2) % 2}
+      tableSeckillOutboxV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_outbox_${voucher_id.intdiv(2) % 2}
+      tableSeckillSubscriptionV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_subscription_${voucher_id.intdiv(2) % 2}
+      tableSeckillRecoveryV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_recovery_${voucher_id.intdiv(2) % 2}
+      tableSeckillNotificationV2:
+        type: INLINE
+        props:
+          algorithm-expression: tb_seckill_notification_${voucher_id.intdiv(2) % 2}
 props:
   sql-show: true

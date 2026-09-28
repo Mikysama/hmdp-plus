@@ -15,6 +15,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  **/
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {
+    @Resource private org.javaup.seckill.SeckillSecurityInterceptor seckillSecurity;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -25,15 +26,17 @@ public class MvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(new LoginInterceptor())
                 .excludePathPatterns(
                         "/shop/**",
-                        "/voucher/**",
+                        "/voucher/list/**",
+                        "/voucher/get",
                         "/shop-type/**",
                         "/upload/**",
                         "/blog/hot",
                         "/user/code",
-                        "/user/login",
-                        "/user/password/reset"
+                        "/user/login"
                 ).order(1);
+        registry.addInterceptor(seckillSecurity).addPathPatterns("/voucher/**", "/voucher-order/**").order(2);
         // token刷新的拦截器
         registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
     }
+    // 方法功能：注册登录刷新和登录校验拦截器，并配置接口拦截范围。
 }

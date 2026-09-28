@@ -1,6 +1,7 @@
 package org.javaup.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
 import org.javaup.entity.UserPhone;
 
 /**
@@ -8,6 +9,7 @@ import org.javaup.entity.UserPhone;
  * @description: 用户手机 Mapper
  * @author: 阿星不是程序员
  **/
+@Mapper
 public interface UserPhoneMapper extends BaseMapper<UserPhone> {
 
 }

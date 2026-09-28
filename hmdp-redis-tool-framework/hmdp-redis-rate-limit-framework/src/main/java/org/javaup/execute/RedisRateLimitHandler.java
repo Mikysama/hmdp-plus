@@ -63,7 +63,8 @@ public class RedisRateLimitHandler implements RateLimitHandler {
         int userLimitWindowMillis = resolveUserWindow(scene);
         int userLimitMaxAttempts = resolveUserMaxAttempts(scene);
         boolean useSliding = resolveSliding();
-        List<String> keys = buildRateLimitKeys(voucherId, userId, clientIp, useSliding);
+        List<String> keys = buildRateLimitKeys(voucherId, userId, clientIp, useSliding).stream().map(k -> k + ":" + scene.name()).toList();
+        if (scene == RateLimitScene.RESULT_QUERY) { ipLimitWindowMillis=1000; ipLimitMaxAttempts=50; userLimitWindowMillis=1000; userLimitMaxAttempts=5; }
         String[] args = buildArgs(ipLimitWindowMillis, ipLimitMaxAttempts, userLimitWindowMillis, userLimitMaxAttempts);
 
         RateLimitContext ctx = buildContext(voucherId, userId, clientIp, keys, useSliding,
@@ -169,21 +170,17 @@ public class RedisRateLimitHandler implements RateLimitHandler {
                 return null;
             }
             HttpServletRequest request = attrs.getRequest();
-            String xff = request.getHeader("X-Forwarded-For");
-            if (xff != null && !xff.isEmpty()) {
-                String[] parts = xff.split(",");
-                if (parts.length > 0) {
-                    String ip = parts[0].trim();
-                    if (!ip.isEmpty()) {
-                        return ip;
-                    }
-                }
+            String remote=request.getRemoteAddr();
+            if(!seckillRateLimitConfigProperties.getTrustedProxies().contains(remote))return remote;
+            String header=request.getHeader("X-Forwarded-For");
+            if(header==null||header.length()>2048)return remote;
+            String[] chain=header.split(",");
+            // Walk from the nearest proxy; never trust a client-supplied leftmost value.
+            for(int i=chain.length-1;i>=0;i--){String ip=chain[i].trim();
+                if(!ip.matches("[0-9a-fA-F:.]{3,45}"))return remote;
+                if(!seckillRateLimitConfigProperties.getTrustedProxies().contains(ip))return ip;
             }
-            String realIp = request.getHeader("X-Real-IP");
-            if (realIp != null && !realIp.isEmpty()) {
-                return realIp;
-            }
-            return request.getRemoteAddr();
+            return remote;
         } catch (Exception e) {
             return null;
         }
@@ -224,7 +221,8 @@ public class RedisRateLimitHandler implements RateLimitHandler {
                                             String clientIp, 
                                             boolean useSliding) {
         List<String> keys = new ArrayList<>(2);
-        if (Objects.nonNull(clientIp)) {
+        {
+            if (clientIp == null) clientIp = "unknown";
             String ipKey = useSliding
                     ? RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_LIMIT_IP_SW_TAG_KEY, voucherId, clientIp).getRelKey()
                     : RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_LIMIT_IP_TB_TAG_KEY, voucherId, clientIp).getRelKey();

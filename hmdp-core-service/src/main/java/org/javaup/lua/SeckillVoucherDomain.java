@@ -18,6 +18,4 @@ public class SeckillVoucherDomain {
     
     private Integer afterQty;
 
-    private String outboxId;
-
 }

@@ -66,8 +66,7 @@ public class RedisVoucherData {
         List<String> keys = ListUtil.of(
                 RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId).getRelKey(),
                 RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_USER_TAG_KEY, voucherId).getRelKey(),
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId).getRelKey(),
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY, voucherId).getRelKey()
+                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId).getRelKey()
         );
         String[] args = new String[9];
         args[0] = String.valueOf(voucherId);
@@ -89,6 +88,7 @@ public class RedisVoucherData {
             safeInc("seckill_rollback_retry_give_up", "component", "redis_voucher_data");
         }
     }
+    // 方法功能：回滚 Redis 中的秒杀券库存、用户购买记录和追踪日志。
     
     private Integer luaRollbackWithResultCode(
             List<String> keys,
@@ -122,11 +122,13 @@ public class RedisVoucherData {
         }
         return lastCode;
     }
+    // 方法功能：通过 Lua 脚本执行 Redis 回滚并返回业务结果码。
     
     private long withJitter(long base) {
         long jitter = Math.round(base * 0.15 * Math.random());
         return base + jitter;
     }
+    // 方法功能：为基础退避时间增加随机抖动。
     
     private void sleepQuietly(long backoffMs) {
         try {
@@ -135,6 +137,7 @@ public class RedisVoucherData {
             Thread.currentThread().interrupt();
         }
     }
+    // 方法功能：按指定时间休眠并保留线程中断状态。
     
     private void saveRollbackFailureLog(Long voucherId, Long userId, Long orderId, Long traceId, String detail, Integer resultCode) {
         try {
@@ -158,6 +161,7 @@ public class RedisVoucherData {
             log.warn("保存回滚失败日志异常", e);
         }
     }
+    // 方法功能：保存 Redis 库存回滚失败日志用于后续补偿。
     
     private void safeInc(String name, String tagKey, String tagValue) {
         try {
@@ -167,4 +171,5 @@ public class RedisVoucherData {
         } catch (Exception ignore) {
         }
     }
+    // 方法功能：安全递增监控指标，避免指标异常影响主流程。
 }

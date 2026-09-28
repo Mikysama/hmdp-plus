@@ -17,49 +17,50 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class SeckillVoucherLocalCache {
 
-    private final Cache<String, SeckillVoucherFullModel> cache;
-
-    public SeckillVoucherLocalCache(CacheTtlPolicy cacheTtlPolicy) {
-        this.cache = Caffeine.newBuilder()
+    private final Cache<String, SeckillVoucherFullModel> cache = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfter(new Expiry<String, SeckillVoucherFullModel>() {
                 @Override
                 public long expireAfterCreate(String key, SeckillVoucherFullModel value, long currentTime) {
-                    long ttlSeconds = cacheTtlPolicy.withJitter(60L);
+                    long ttlSeconds = 60L;
                     if (value != null && value.getEndTime() != null) {
-                        long secondsUntilEnd = Math.max(
+                        ttlSeconds = Math.max(
                                 LocalDateTimeUtil.between(LocalDateTimeUtil.now(), value.getEndTime()).getSeconds(),
                                 1L
                         );
-                        ttlSeconds = cacheTtlPolicy.forSeckillVoucher(secondsUntilEnd);
                     }
                     return TimeUnit.NANOSECONDS.convert(ttlSeconds, TimeUnit.SECONDS);
                 }
+                // 方法功能：按秒杀券结束时间计算本地缓存创建后的过期时间。
                 
                 @Override
                 public long expireAfterUpdate(String key, SeckillVoucherFullModel value, long currentTime, long currentDuration) {
                     return currentDuration;
                 }
+                // 方法功能：保持秒杀券本地缓存更新前已有的过期时间。
                 
                 @Override
                 public long expireAfterRead(String key, SeckillVoucherFullModel value, long currentTime, long currentDuration) {
                     return currentDuration;
                 }
+                // 方法功能：读取秒杀券本地缓存时不延长缓存过期时间。
             })
             .build();
-    }
     
     public SeckillVoucherFullModel get(String voucherId) {
         return cache.getIfPresent(voucherId);
     }
+    // 方法功能：按请求参数查询并返回对应业务数据。
     
     public void put(String voucherId, SeckillVoucherFullModel voucher) {
         if (voucherId != null && voucher != null) {
             cache.put(voucherId, voucher);
         }
     }
+    // 方法功能：写入指定秒杀券到本地缓存。
     
     public void invalidate(String voucherId) {
         cache.invalidate(voucherId);
     }
+    // 方法功能：删除指定秒杀券的本地缓存。
 }

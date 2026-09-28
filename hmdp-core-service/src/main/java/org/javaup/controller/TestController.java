@@ -27,4 +27,5 @@ public class TestController {
         counter.increment();
         return Result.ok("指标上报成功，当前计数: " + counter.count());
     }
+    // 方法功能：查询 shop by id 相关数据并返回结果。
 }

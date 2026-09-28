@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.javaup.constant.DistributedLockConstants.UPDATE_SECKILL_VOUCHER_STOCK_LOCK;
+import static org.javaup.kafka.consumer.SeckillVoucherConsumer.MESSAGE_DELAY_TIME;
 
 /**
  * @program: 黑马点评-plus升级版实战项目。添加 阿星不是程序员 微信，添加时备注 点评 来获取项目的完整资料
@@ -62,6 +63,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
             reconciliationTaskExecute(seckillVoucher.getVoucherId());
         }
     }
+    // 方法功能：执行秒杀券订单与 Redis 扣减记录的对账任务。
     
     public void reconciliationTaskExecute(Long voucherId){
         Map<String, RedisTraceLogModel> redisTraceLogMap = loadRedisTraceLogMap(voucherId);
@@ -83,8 +85,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
             boolean markConsistent = true;
             if (dbLogCount == 1 || dbLogCount == 2) {
                 if (anyMissing) {
-                    log.warn("对账已补齐Redis流水，不清除仍可能含有预订的库存，voucherId={}, orderId={}",
-                            voucherId, voucherOrder.getId());
+                    ((IReconciliationTaskService) AopContext.currentProxy()).delRedisStock(voucherId);
                 }
             } else {
                 ((ReconciliationTaskServiceImpl) AopContext.currentProxy())
@@ -97,6 +98,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
             }
         }
     }
+    // 方法功能：执行秒杀券订单与 Redis 扣减记录的对账任务。
     
     @Override
     @ServiceLock(lockType= LockType.Write,name = UPDATE_SECKILL_VOUCHER_STOCK_LOCK,keys = {"#voucherId"})
@@ -104,15 +106,17 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
         RedisKeyBuild stockKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId);
         redisCache.del(stockKey);
     }
+    // 方法功能：删除指定秒杀券的 Redis 库存缓存。
 
     private List<VoucherOrder> loadPendingOrders(Long voucherId) {
         return voucherOrderService.lambdaQuery()
                 .eq(VoucherOrder::getVoucherId, voucherId)
-                .le(VoucherOrder::getCreateTime, LocalDateTimeUtil.offset(LocalDateTimeUtil.now(), -2, ChronoUnit.MINUTES))
+                .le(VoucherOrder::getCreateTime, LocalDateTimeUtil.offset(LocalDateTimeUtil.now(), 2, ChronoUnit.MINUTES))
                 .eq(VoucherOrder::getReconciliationStatus, ReconciliationStatus.PENDING.getCode())
                 .orderByAsc(VoucherOrder::getCreateTime)
                 .list();
     }
+    // 方法功能：加载指定秒杀券待对账的订单列表。
 
     private List<VoucherReconcileLog> loadReconcileLogs(Long orderId) {
         return voucherReconcileLogService.lambdaQuery()
@@ -120,6 +124,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
                 .orderByAsc(VoucherReconcileLog::getCreateTime)
                 .list();
     }
+    // 方法功能：加载指定订单关联的对账日志列表。
 
     private Map<String, RedisTraceLogModel> loadRedisTraceLogMap(Long voucherId) {
         return redisCache.getAllMapForHash(
@@ -127,6 +132,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
                 RedisTraceLogModel.class
         );
     }
+    // 方法功能：读取指定秒杀券的 Redis 扣减追踪日志映射。
 
     private long resolveTraceTtlSeconds(RedisKeyBuild traceLogKey, Long voucherId) {
         Long ttlSeconds = redisCache.getExpire(traceLogKey, TimeUnit.SECONDS);
@@ -144,13 +150,17 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
         }
         return computedTtl;
     }
+    // 方法功能：计算 Redis 追踪日志的剩余过期时间。
     
 
     private void redisDeductTraceWithoutDbOrder(Long voucherId, Map<String, RedisTraceLogModel> redisTraceLogMap) {
         if (voucherId == null || CollectionUtil.isEmpty(redisTraceLogMap)) {
             return;
         }
-        RedisKeyBuild stateKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY, voucherId);
+        RedisKeyBuild traceLogKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId);
+        RedisKeyBuild seckillUserKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_USER_TAG_KEY, voucherId);
+        boolean delRedisStockHasHappened = false;
+        long now = System.currentTimeMillis();
         for (Entry<String, RedisTraceLogModel> redisTraceLogModelEntry : redisTraceLogMap.entrySet()) {
             String traceId = redisTraceLogModelEntry.getKey();
             RedisTraceLogModel redisTraceLogModel = redisTraceLogModelEntry.getValue();
@@ -167,17 +177,21 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
                             .eq(VoucherReconcileLog::getTraceId, Long.parseLong(traceId))
                             .one();
             if (Objects.isNull(voucherReconcileLog)){
-                String state = (String) redisCache.getInstance().opsForHash().get(
-                        stateKey.getRelKey(), orderId);
-                if ("RESERVED".equals(state) || "ROLLED_BACK".equals(state)
-                        || "CANCELLED".equals(state)) {
+                Long traceTs = redisTraceLogModel.getTs();
+                if (traceTs != null && now - traceTs < (MESSAGE_DELAY_TIME + 2000)) {
                     continue;
                 }
-                log.error("秒杀扣减流水缺少数据库对账记录，保留预订等待核查，voucherId={}, orderId={}, state={}",
-                        voucherId, orderId, state);
+                log.error("发现Redis扣减流水存在，但DB订单不存在的情况，voucherId={}, orderId={}", voucherId, orderId);
+                if (!delRedisStockHasHappened) {
+                    ((IReconciliationTaskService) AopContext.currentProxy()).delRedisStock(voucherId);
+                    delRedisStockHasHappened = true;
+                }
+                redisCache.delForHash(traceLogKey, traceId);
+                redisCache.removeForSet(seckillUserKey, redisTraceLogModel.getUserId());
             }
         }
     }
+    // 方法功能：处理存在 Redis 扣减记录但缺失数据库订单的异常场景。
 
     private boolean backfillMissingTraceLogs(List<VoucherReconcileLog> logs,
                                              Map<String, RedisTraceLogModel> redisTraceLogMap,
@@ -209,6 +223,7 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
         }
         return anyMissing;
     }
+    // 方法功能：为缺失 Redis 追踪记录的对账日志回补缓存数据。
 
     @Transactional(rollbackFor = Exception.class)
     public void markOrderStatus(Long orderId, ReconciliationStatus status) {
@@ -223,4 +238,5 @@ public class ReconciliationTaskServiceImpl implements IReconciliationTaskService
                 .eq(VoucherReconcileLog::getOrderId, orderId)
                 .update();
     }
+    // 方法功能：更新订单对账状态。
 }

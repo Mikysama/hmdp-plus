@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElTabs, ElTabPane } from 'element-plus'
 import { ArrowLeft, Edit, ChatDotRound } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores'
-import { getUser, getUserBlog, getUserInfo, userLogout } from '@/api/user'
+import { getUser, getUserBlog, getUserInfo } from '@/api/user'
 import {
   indexQueryHotBlogsScroll,
   indexAddLike,
@@ -108,13 +108,10 @@ const toEdit = () => {
   router.push('/infoEdit')
 }
 
-const logout = async () => {
-  try {
-    await userLogout()
-  } finally {
-    userStore.resetSession()
-    router.push('/login')
-  }
+const logout = () => {
+  // 退出登录
+  userStore.resetUserInfo()
+  router.push('/login')
 }
 
 const handleClick = (tab) => {

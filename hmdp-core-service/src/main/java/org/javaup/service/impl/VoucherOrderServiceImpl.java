@@ -12,6 +12,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.javaup.core.RedisKeyManage;
+import org.javaup.core.SpringUtil;
 import org.javaup.dto.CancelVoucherOrderDto;
 import org.javaup.dto.GetVoucherOrderByVoucherIdDto;
 import org.javaup.dto.GetVoucherOrderDto;
@@ -29,9 +30,9 @@ import org.javaup.enums.OrderStatus;
 import org.javaup.enums.SeckillVoucherOrderOperate;
 import org.javaup.exception.HmdpFrameException;
 import org.javaup.kafka.message.SeckillVoucherMessage;
+import org.javaup.kafka.producer.SeckillVoucherProducer;
 import org.javaup.kafka.redis.RedisVoucherData;
 import org.javaup.lua.SeckillVoucherDomain;
-import org.javaup.lua.SeckillVoucherCommitOperate;
 import org.javaup.lua.SeckillVoucherOperate;
 import org.javaup.mapper.VoucherOrderMapper;
 import org.javaup.mapper.VoucherOrderRouterMapper;
@@ -52,7 +53,6 @@ import org.javaup.utils.UserHolder;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.stream.Consumer;
 import org.springframework.data.redis.connection.stream.MapRecord;
@@ -65,8 +65,6 @@ import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -83,6 +81,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.javaup.constant.Constant.SECKILL_VOUCHER_TOPIC;
 import static org.javaup.constant.RepeatExecuteLimitConstants.SECKILL_VOUCHER_ORDER;
 
 /**
@@ -116,7 +115,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private SeckillVoucherOperate seckillVoucherOperate;
 
     @Resource
-    private SeckillVoucherCommitOperate seckillVoucherCommitOperate;
+    private SeckillVoucherProducer seckillVoucherProducer;
     
     @Resource
     private RedisCacheImpl redisCache;
@@ -168,6 +167,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             this.namePrefix = namePrefix;
             this.daemon = daemon;
         }
+        // 方法功能：实现 VoucherOrderServiceImpl.NamedThreadFactory 的业务逻辑。
 
         @Override
         public Thread newThread(Runnable r) {
@@ -178,6 +178,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             );
             return t;
         }
+        // 方法功能：创建带业务前缀和守护标记的线程。
     }
     
     
@@ -186,6 +187,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 这是黑马点评的普通版本，升级版本中不再使用此方式
         //SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
     }
+    // 方法功能：初始化当前组件需要的脚本、缓存、线程或启动数据。
 
     @PreDestroy
     private void destroy(){
@@ -199,6 +201,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             SECKILL_ORDER_EXECUTOR.shutdownNow();
         }
     }
+    // 方法功能：关闭秒杀订单消费线程池资源。
     
     /***
      * 这是黑马点评的普通版本，升级版本中不再使用此方式
@@ -236,6 +239,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 }
             }
         }
+        // 方法功能：循环消费 Redis Stream 中的秒杀订单消息。
 
         public void initStream(){
             Boolean exists = stringRedisTemplate.hasKey(queueName);
@@ -255,6 +259,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 log.info("group创建完毕");
             }
         }
+        // 方法功能：初始化秒杀订单 Redis Stream 及消费者组。
 
         private void handlePendingList() {
             while (true) {
@@ -283,6 +288,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 }
             }
         }
+        // 方法功能：处理 Redis Stream pending-list 中未确认的秒杀订单消息。
     }
 
     private void handleVoucherOrder(VoucherOrder voucherOrder) {
@@ -306,6 +312,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             lock.unlock();
         }
     }
+    // 方法功能：处理单条 Redis Stream 秒杀订单并确认消费进度。
 
     IVoucherOrderService proxy;
     /**
@@ -316,6 +323,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         //return doSeckillVoucherV1(voucherId);
         return doSeckillVoucherV2(voucherId);
     }
+    // 方法功能：校验秒杀访问令牌后发起秒杀下单。
     
     public Result<Long> doSeckillVoucherV1(Long voucherId) {
         Long userId = UserHolder.getUser().getId();
@@ -337,6 +345,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 4.返回订单id
         return Result.ok(orderId);
     }
+    // 方法功能：使用数据库事务和锁的方式执行秒杀下单。
     
     public Result<Long> doSeckillVoucherV2(Long voucherId) {
         SeckillVoucherFullModel seckillVoucherFullModel = seckillVoucherService.queryByVoucherId(voucherId);
@@ -348,11 +357,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         List<String> keys = ListUtil.of(
                 RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId).getRelKey(),
                 RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_USER_TAG_KEY, voucherId).getRelKey(),
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId).getRelKey(),
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY, voucherId).getRelKey(),
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_OUTBOX_TAG_KEY, voucherId).getRelKey()
+                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId).getRelKey()
         );
-        String[] args = new String[10];
+        String[] args = new String[9];
         args[0] = voucherId.toString();
         args[1] = userId.toString();
         args[2] = String.valueOf(LocalDateTimeUtil.toEpochMilli(seckillVoucherFullModel.getBeginTime()));
@@ -362,9 +369,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         args[6] = String.valueOf(traceId);
         args[7] = String.valueOf(LogType.DEDUCT.getCode());
         long secondsUntilEnd = Duration.between(LocalDateTimeUtil.now(), seckillVoucherFullModel.getEndTime()).getSeconds();
-        long ttlSeconds = Math.max(1L, secondsUntilEnd + Duration.ofDays(7).getSeconds());
+        long ttlSeconds = Math.max(1L, secondsUntilEnd + Duration.ofDays(1).getSeconds());
         args[8] = String.valueOf(ttlSeconds);
-        args[9] = "false";
         SeckillVoucherDomain seckillVoucherDomain = seckillVoucherOperate.execute(
                 keys,
                 args
@@ -372,10 +378,23 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (!seckillVoucherDomain.getCode().equals(BaseCode.SUCCESS.getCode())) {
             throw new HmdpFrameException(Objects.requireNonNull(BaseCode.getRc(seckillVoucherDomain.getCode())));
         }
-        // Lua has already stored the order in a Redis Stream together with the reservation.
-        // The relay publishes it to Kafka and retries after process crashes.
+        SeckillVoucherMessage seckillVoucherMessage = new SeckillVoucherMessage(
+                userId,
+                voucherId,
+                orderId,
+                traceId,
+                seckillVoucherDomain.getBeforeQty(),
+                seckillVoucherDomain.getDeductQty(),
+                seckillVoucherDomain.getAfterQty(),
+                Boolean.FALSE
+        );
+        seckillVoucherProducer.sendPayload(
+                SpringUtil.getPrefixDistinctionName() + "-" + SECKILL_VOUCHER_TOPIC,
+                seckillVoucherMessage);
+
         return Result.ok(orderId);
     }
+    // 方法功能：使用 Redis Lua 校验和 Kafka 消息方式执行异步秒杀下单。
     
     public void verifyUserLevel(SeckillVoucherFullModel seckillVoucherFullModel,Long userId){
         String allowedLevelsStr = seckillVoucherFullModel.getAllowedLevels();
@@ -413,6 +432,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             throw new HmdpFrameException("当前会员级别不满足参与条件");
         }
     }
+    // 方法功能：校验用户会员等级是否满足秒杀券参与规则。
 
    
     private static class AudienceRule {
@@ -423,9 +443,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         boolean hasLevelRule(){
             return (allowedLevels != null && !allowedLevels.isEmpty()) || minLevel != null;
         }
+        // 方法功能：判断受众规则中是否配置会员等级限制。
         boolean hasCityRule(){
             return allowedCities != null && !allowedCities.isEmpty();
         }
+        // 方法功能：判断受众规则中是否配置城市限制。
     }
 
     @Override
@@ -457,10 +479,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 7.创建订单
         save(voucherOrder);
     }
+    // 方法功能：使用同步事务方式创建秒杀订单并扣减数据库库存。
     
     
     @Override
-    @RepeatExecuteLimit(name = SECKILL_VOUCHER_ORDER,keys = {"#message.messageBody.orderId"})
+    @RepeatExecuteLimit(name = SECKILL_VOUCHER_ORDER,keys = {"#message.uuid"})
     @Transactional(rollbackFor = Exception.class)
     public boolean createVoucherOrderV2(MessageExtend<SeckillVoucherMessage> message) {
         SeckillVoucherMessage messageBody = message.getMessageBody();
@@ -471,19 +494,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .eq(VoucherOrder::getStatus,OrderStatus.NORMAL.getCode())
                 .one();
         if (Objects.nonNull(normalVoucherOrder)) {
-            if (Objects.equals(normalVoucherOrder.getId(), messageBody.getOrderId())) {
-                scheduleOrderCommitted(messageBody, normalVoucherOrder);
-                return true;
-            }
             log.warn("已存在此订单，voucherId：{},userId：{}", normalVoucherOrder.getVoucherId(), userId);
             throw new HmdpFrameException(BaseCode.VOUCHER_ORDER_EXIST);
-        }
-        String orderState = (String) stringRedisTemplate.opsForHash().get(
-                RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY,
-                        messageBody.getVoucherId()).getRelKey(),
-                String.valueOf(messageBody.getOrderId()));
-        if (!"RESERVED".equals(orderState)) {
-            throw new HmdpFrameException("秒杀预订不存在或已结束，拒绝创建订单");
         }
         boolean success = seckillVoucherService.update()
                 .setSql("stock = stock - 1")
@@ -498,13 +510,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         voucherOrder.setUserId(messageBody.getUserId());
         voucherOrder.setVoucherId(messageBody.getVoucherId());
         voucherOrder.setCreateTime(LocalDateTimeUtil.now());
-        try {
-            if (!save(voucherOrder)) {
-                throw new HmdpFrameException("创建优惠券订单失败");
-            }
-        } catch (DuplicateKeyException duplicateKeyException) {
-            throw new HmdpFrameException(BaseCode.VOUCHER_ORDER_EXIST);
-        }
+        save(voucherOrder);
         VoucherOrderRouter voucherOrderRouter = new VoucherOrderRouter();
         voucherOrderRouter.setId(snowflakeIdGenerator.nextId());
         voucherOrderRouter.setOrderId(voucherOrder.getId());
@@ -512,54 +518,22 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         voucherOrderRouter.setVoucherId(voucherOrder.getVoucherId());
         voucherOrderRouter.setCreateTime(LocalDateTimeUtil.now());
         voucherOrderRouter.setUpdateTime(LocalDateTimeUtil.now());
-        if (!voucherOrderRouterService.save(voucherOrderRouter)) {
-            throw new HmdpFrameException("创建优惠券订单路由失败");
-        }
-        if (!voucherReconcileLogService.saveReconcileLog(
+        voucherOrderRouterService.save(voucherOrderRouter);
+        redisCache.set(RedisKeyBuild.createRedisKey(
+                RedisKeyManage.DB_SECKILL_ORDER_KEY,messageBody.getOrderId()),
+                voucherOrder,
+                60,
+                TimeUnit.SECONDS
+        );
+        voucherReconcileLogService.saveReconcileLog(
                 LogType.DEDUCT.getCode(),
                 BusinessType.SUCCESS.getCode(),
                 "order created",
                 message
-        )) {
-            throw new HmdpFrameException("保存优惠券订单对账日志失败");
-        }
-        scheduleOrderCommitted(messageBody, voucherOrder);
+        );
         return true;
     }
-
-    private void scheduleOrderCommitted(SeckillVoucherMessage messageBody, VoucherOrder voucherOrder) {
-        Runnable afterCommit = () -> {
-            RedisKeyBuild stateKey = RedisKeyBuild.createRedisKey(
-                    RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY, messageBody.getVoucherId());
-            int commitCode = seckillVoucherCommitOperate.execute(
-                    stateKey.getRelKey(), messageBody.getOrderId());
-            if (!Objects.equals(commitCode, BaseCode.SUCCESS.getCode())) {
-                log.error("标记秒杀预订COMMITTED失败，orderId={}, voucherId={}, code={}",
-                        messageBody.getOrderId(), messageBody.getVoucherId(), commitCode);
-                return;
-            }
-            redisCache.set(
-                    RedisKeyBuild.createRedisKey(RedisKeyManage.DB_SECKILL_ORDER_KEY,
-                            messageBody.getOrderId()),
-                    voucherOrder,
-                    60,
-                    TimeUnit.SECONDS);
-        };
-        registerAfterCommit(afterCommit);
-    }
-
-    private void registerAfterCommit(Runnable task) {
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            task.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                task.run();
-            }
-        });
-    }
+    // 方法功能：消费秒杀消息并创建订单、路由和对账日志。
     
     @Override
     public Long getSeckillVoucherOrder(GetVoucherOrderDto getVoucherOrderDto) {
@@ -580,6 +554,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         return null;
     }
+    // 方法功能：查询指定用户和秒杀券对应的订单 ID。
     
     @Override
     public Long getSeckillVoucherOrderIdByVoucherId(GetVoucherOrderByVoucherIdDto getVoucherOrderByVoucherIdDto) {
@@ -593,6 +568,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         return null;
     }
+    // 方法功能：按秒杀券 ID 查询当前用户的订单 ID。
     
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -634,47 +610,42 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         
         Boolean result = updateResult && saveReconcileLogResult && rollbackStockResult;
         if (result) {
-            registerAfterCommit(() -> applyCancellationEffects(
-                    cancelVoucherOrderDto, voucherOrder, seckillVoucher, traceId));
+            redisVoucherData.rollbackRedisVoucherData(
+                    SeckillVoucherOrderOperate.YES,
+                    traceId,
+                    voucherOrder.getVoucherId(),
+                    voucherOrder.getUserId(),
+                    voucherOrder.getId(),
+                    seckillVoucher.getStock(),
+                    1,
+                    seckillVoucher.getStock() + 1
+            );
+            redisCache.delForHash(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_SUBSCRIBE_STATUS_TAG_KEY,
+                    cancelVoucherOrderDto.getVoucherId()),
+                    String.valueOf(voucherOrder.getUserId()));
+            Voucher voucher = voucherService.getById(voucherOrder.getVoucherId());
+            if (Objects.nonNull(voucher)) {
+                String day = voucherOrder.getCreateTime().format(DateTimeFormatter.BASIC_ISO_DATE);
+                RedisKeyBuild dailyKey = RedisKeyBuild.createRedisKey(
+                        RedisKeyManage.SECKILL_SHOP_TOP_BUYERS_DAILY_TAG_KEY,
+                        voucher.getShopId(),
+                        day
+                );
+                redisCache.incrementScoreForSortedSet(dailyKey, String.valueOf(voucherOrder.getUserId()), -1.0);
+            }
+
+            try {
+                autoIssueVoucherToEarliestSubscriber(
+                        voucherOrder.getVoucherId(),
+                        voucherOrder.getUserId()
+                );
+            } catch (Exception e) {
+                log.warn("自动发券失败，voucherId={}, err=\n{}", voucherOrder.getVoucherId(), e.getMessage());
+            }
         }
         return result;
     }
-
-    private void applyCancellationEffects(CancelVoucherOrderDto cancelVoucherOrderDto,
-                                          VoucherOrder voucherOrder,
-                                          SeckillVoucher seckillVoucher,
-                                          long traceId) {
-        redisVoucherData.rollbackRedisVoucherData(
-                SeckillVoucherOrderOperate.CANCEL,
-                traceId,
-                voucherOrder.getVoucherId(),
-                voucherOrder.getUserId(),
-                voucherOrder.getId(),
-                seckillVoucher.getStock(),
-                1,
-                seckillVoucher.getStock() + 1
-        );
-        redisCache.delForHash(RedisKeyBuild.createRedisKey(
-                        RedisKeyManage.SECKILL_SUBSCRIBE_STATUS_TAG_KEY,
-                        cancelVoucherOrderDto.getVoucherId()),
-                String.valueOf(voucherOrder.getUserId()));
-        Voucher voucher = voucherService.getById(voucherOrder.getVoucherId());
-        if (Objects.nonNull(voucher)) {
-            String day = voucherOrder.getCreateTime().format(DateTimeFormatter.BASIC_ISO_DATE);
-            RedisKeyBuild dailyKey = RedisKeyBuild.createRedisKey(
-                    RedisKeyManage.SECKILL_SHOP_TOP_BUYERS_DAILY_TAG_KEY,
-                    voucher.getShopId(),
-                    day
-            );
-            redisCache.incrementScoreForSortedSet(
-                    dailyKey, String.valueOf(voucherOrder.getUserId()), -1.0);
-        }
-        try {
-            autoIssueVoucherToEarliestSubscriber(voucherOrder.getVoucherId(), voucherOrder.getUserId());
-        } catch (Exception e) {
-            log.warn("自动发券失败，voucherId={}, err=\n{}", voucherOrder.getVoucherId(), e.getMessage());
-        }
-    }
+    // 方法功能：取消秒杀订单并回滚库存、订阅和缓存状态。
     
     @Override
     public boolean autoIssueVoucherToEarliestSubscriber(final Long voucherId, final Long excludeUserId) {
@@ -693,6 +664,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         return issueToCandidate(voucherId, candidateUserIdStr, seckillVoucherFullModel);
     }
+    // 方法功能：尝试向最早订阅且符合条件的用户自动补发秒杀券。
     
     private String findEarliestCandidate(final Long voucherId, final Long excludeUserId) {
         RedisKeyBuild subscribeZSetKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_SUBSCRIBE_ZSET_TAG_KEY, voucherId);
@@ -734,6 +706,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return uidStr;
         }
     }
+    // 方法功能：从订阅集合中查找最早且未被排除的候选用户。
     
     private boolean issueToCandidate(final Long voucherId, 
                                      final String candidateUserIdStr, 
@@ -754,24 +727,38 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             log.info("自动发券Lua扣减失败，code={}, voucherId={}, userId={}", domain.getCode(), voucherId, candidateUserId);
             return false;
         }
+        SeckillVoucherMessage message = new SeckillVoucherMessage(
+                candidateUserId,
+                voucherId,
+                orderId,
+                traceId,
+                domain.getBeforeQty(),
+                domain.getDeductQty(),
+                domain.getAfterQty(),
+                Boolean.TRUE
+        );
+        seckillVoucherProducer.sendPayload(
+                SpringUtil.getPrefixDistinctionName() + "-" + SECKILL_VOUCHER_TOPIC,
+                message
+        );
         return true;
     }
+    // 方法功能：向候选用户执行秒杀券自动发放并发送订单消息。
     
     private List<String> buildSeckillKeys(final Long voucherId) {
         String stockKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId).getRelKey();
         String userKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_USER_TAG_KEY, voucherId).getRelKey();
         String traceKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_TRACE_LOG_TAG_KEY, voucherId).getRelKey();
-        String orderStateKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_STATE_TAG_KEY, voucherId).getRelKey();
-        String outboxKey = RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_ORDER_OUTBOX_TAG_KEY, voucherId).getRelKey();
-        return ListUtil.of(stockKey, userKey, traceKey, orderStateKey, outboxKey);
+        return ListUtil.of(stockKey, userKey, traceKey);
     }
+    // 方法功能：构造秒杀 Lua 脚本所需的 Redis key 列表。
     
     private String[] buildSeckillArgs(final Long voucherId,
                                       final String userIdStr,
                                       final SeckillVoucherFullModel seckillVoucherFullModel,
                                       final long orderId,
                                       final long traceId) {
-        String[] args = new String[10];
+        String[] args = new String[9];
         args[0] = voucherId.toString();
         args[1] = userIdStr;
         args[2] = String.valueOf(LocalDateTimeUtil.toEpochMilli(seckillVoucherFullModel.getBeginTime()));
@@ -781,14 +768,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         args[6] = String.valueOf(traceId);
         args[7] = String.valueOf(LogType.DEDUCT.getCode());
         args[8] = String.valueOf(computeTtlSeconds(seckillVoucherFullModel));
-        args[9] = "true";
         return args;
     }
+    // 方法功能：构造秒杀 Lua 脚本所需的参数数组。
     
     private long computeTtlSeconds(final SeckillVoucherFullModel seckillVoucherFullModel) {
         long secondsUntilEnd = Duration.between(LocalDateTimeUtil.now(), seckillVoucherFullModel.getEndTime()).getSeconds();
-        return Math.max(1L, secondsUntilEnd + Duration.ofDays(7).getSeconds());
+        return Math.max(1L, secondsUntilEnd + Duration.ofDays(1).getSeconds());
     }
+    // 方法功能：根据秒杀券结束时间计算 Redis 业务数据 TTL。
 
     /*
     private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);

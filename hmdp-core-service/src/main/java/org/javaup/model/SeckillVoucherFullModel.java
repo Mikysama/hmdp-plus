@@ -1,3 +1,4 @@
+
 package org.javaup.model;
 
 import lombok.Data;

@@ -31,6 +31,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 		}
 		return beanProperties;
 	}
+	// 方法功能：为返回对象的字段追加自定义空值序列化器。
 
 	public com.fasterxml.jackson.databind.JsonSerializer<Object> judgeType(BeanPropertyWriter writer) {
 		JavaType javaType = writer.getType();
@@ -42,6 +43,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 						throws IOException {
 					gen.writeString("");
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		if (Number.class.isAssignableFrom(clazz)) {
@@ -51,6 +53,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 						throws IOException {
 					gen.writeString("");
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		if (Boolean.class.isAssignableFrom(clazz)) {
@@ -60,6 +63,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 						throws IOException {
 					gen.writeBoolean(false);
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		if (java.util.Date.class.isAssignableFrom(clazz)) {
@@ -69,6 +73,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 						throws IOException {
 					gen.writeString("");
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		if (clazz.equals(DateTime.class)) {
@@ -78,6 +83,7 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 						throws IOException {
 					gen.writeString("");
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		if (clazz.isArray() || clazz.equals(List.class) || clazz.equals(Set.class)) {
@@ -88,8 +94,10 @@ public class JsonCustomSerializer extends BeanSerializerModifier {
 					gen.writeStartArray();
 					gen.writeEndArray();
 				}
+				// 方法功能：将对应类型的空值序列化为约定的 JSON 默认值。
 			};
 		}
 		return null;
 	}
+	// 方法功能：根据字段类型选择对应的空值 JSON 序列化策略。
 }

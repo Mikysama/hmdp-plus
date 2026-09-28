@@ -1,6 +1,8 @@
 package org.javaup.dto;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -31,7 +33,15 @@ public class UpdateSeckillVoucherStockDto implements Serializable {
     /**
      * 初始库存
      * */
-    @Min(1)
+    @Min(0)
     @NotNull
     private Integer initStock;
+
+    @NotBlank
+    @Pattern(regexp = "[A-Za-z0-9_-]{1,64}")
+    private String adjustmentId;
+
+    @NotNull
+    @Min(0)
+    private Long expectedVersion;
 }

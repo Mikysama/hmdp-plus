@@ -53,6 +53,7 @@ public class AutoIssueNotifyServiceImpl implements IAutoIssueNotifyService {
             log.warn("发送自动发券通知异常", e);
         }
     }
+    // 方法功能：发送自动补发秒杀券成功通知。
 
     private boolean shouldNotify(Long voucherId, Long userId) {
         try {
@@ -66,4 +67,5 @@ public class AutoIssueNotifyServiceImpl implements IAutoIssueNotifyService {
             return true;
         }
     }
+    // 方法功能：判断当前业务对象是否应在去重窗口内发送通知。
 }

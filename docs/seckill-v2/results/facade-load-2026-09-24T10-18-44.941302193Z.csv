@@ -1,0 +1,4 @@
+scenario,requests,concurrency,stock,accepted,db_accept_calls,elapsed_ms,attempts_per_second,p50_ms,p95_ms,p99_ms,rejections
+redis-facade-8,50000,8,100,100,100,9814.828,5094.333,0.846,1.374,2.480,"{SOLD_OUT=49900}"
+redis-facade-32,50000,32,100,100,100,8014.830,6238.435,3.084,3.762,4.085,"{SOLD_OUT=49900}"
+database-direct-32,5000,32,100,100,5000,110392.153,45.293,598.269,1385.394,2129.247,"{SOLD_OUT=4900}"

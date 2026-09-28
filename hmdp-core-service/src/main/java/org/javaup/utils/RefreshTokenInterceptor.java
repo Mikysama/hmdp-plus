@@ -26,6 +26,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
+    // 方法功能：初始化 RefreshTokenInterceptor 实例并设置必要依赖或父类参数。
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -54,10 +55,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         // 8.放行
         return true;
     }
+    // 方法功能：在请求进入控制器前执行登录或 token 刷新校验。
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         // 移除用户
         UserHolder.removeUser();
     }
+    // 方法功能：请求完成后清理当前线程中的用户上下文。
 }

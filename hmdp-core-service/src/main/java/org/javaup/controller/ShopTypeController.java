@@ -28,4 +28,5 @@ public class ShopTypeController {
                 .query().orderByAsc("sort").list();
         return Result.ok(typeList);
     }
+    // 方法功能：查询 type list 相关数据并返回结果。
 }

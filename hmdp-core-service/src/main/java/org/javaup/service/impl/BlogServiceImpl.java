@@ -66,6 +66,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         });
         return Result.ok(records);
     }
+    // 方法功能：分页查询热门博客并补充用户和点赞状态。
 
     @Override
     public Result queryBlogById(Long id) {
@@ -80,6 +81,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         isBlogLiked(blog);
         return Result.ok(blog);
     }
+    // 方法功能：按 ID 查询博客详情并补充作者与点赞状态。
 
     private void isBlogLiked(Blog blog) {
         // 1.获取登录用户
@@ -94,6 +96,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         Double score = stringRedisTemplate.opsForZSet().score(key, userId.toString());
         blog.setIsLike(score != null);
     }
+    // 方法功能：判断当前登录用户是否已点赞指定博客。
 
     @Override
     public Result likeBlog(Long id) {
@@ -121,6 +124,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         }
         return Result.ok();
     }
+    // 方法功能：切换当前用户对博客的点赞状态并同步点赞计数。
 
     @Override
     public Result queryBlogLikes(Long id) {
@@ -142,6 +146,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         // 4.返回
         return Result.ok(userDTOS);
     }
+    // 方法功能：查询指定博客最近点赞用户列表。
 
     @Override
     public Result saveBlog(Blog blog) {
@@ -167,6 +172,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         // 5.返回id
         return Result.ok(blog.getId());
     }
+    // 方法功能：保存博客并推送到粉丝收件箱。
 
     @Override
     public Result queryBlogOfFollow(Long max, Integer offset) {
@@ -216,6 +222,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
         return Result.ok(r);
     }
+    // 方法功能：滚动分页查询关注用户发布的博客动态。
 
     private void queryBlogUser(Blog blog) {
         Long userId = blog.getUserId();
@@ -223,4 +230,5 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         blog.setName(user.getNickName());
         blog.setIcon(user.getIcon());
     }
+    // 方法功能：为博客填充作者昵称和头像。
 }

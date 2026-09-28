@@ -26,14 +26,17 @@ public class FollowController {
     public Result follow(@PathVariable("id") Long followUserId, @PathVariable("isFollow") Boolean isFollow) {
         return followService.follow(followUserId, isFollow);
     }
+    // 方法功能：关注或取关目标用户并维护 Redis 关注集合。
 
     @GetMapping("/or/not/{id}")
     public Result isFollow(@PathVariable("id") Long followUserId) {
         return followService.isFollow(followUserId);
     }
+    // 方法功能：判断当前用户是否关注目标用户。
 
     @GetMapping("/common/{id}")
     public Result followCommons(@PathVariable("id") Long id){
         return followService.followCommons(id);
     }
+    // 方法功能：查询当前用户与目标用户的共同关注列表。
 }

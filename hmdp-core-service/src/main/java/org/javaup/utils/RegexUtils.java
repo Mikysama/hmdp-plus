@@ -16,6 +16,7 @@ public class RegexUtils {
     public static boolean isPhoneInvalid(String phone){
         return mismatch(phone, RegexPatterns.PHONE_REGEX);
     }
+    // 方法功能：判断手机号格式是否无效。
     /**
      * 是否是无效邮箱格式
      * @param email 要校验的邮箱
@@ -24,6 +25,7 @@ public class RegexUtils {
     public static boolean isEmailInvalid(String email){
         return mismatch(email, RegexPatterns.EMAIL_REGEX);
     }
+    // 方法功能：判断邮箱格式是否无效。
 
     /**
      * 是否是无效验证码格式
@@ -33,6 +35,7 @@ public class RegexUtils {
     public static boolean isCodeInvalid(String code){
         return mismatch(code, RegexPatterns.VERIFY_CODE_REGEX);
     }
+    // 方法功能：判断验证码格式是否无效。
 
     // 校验是否不符合正则格式
     private static boolean mismatch(String str, String regex){
@@ -41,4 +44,5 @@ public class RegexUtils {
         }
         return !str.matches(regex);
     }
+    // 方法功能：按指定正则判断字符串是否为空或不匹配。
 }

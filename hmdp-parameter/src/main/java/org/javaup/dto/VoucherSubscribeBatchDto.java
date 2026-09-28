@@ -24,5 +24,6 @@ public class VoucherSubscribeBatchDto implements Serializable {
      * 优惠券id集合
      * */
     @NotNull
-    private List<Long> voucherIdList;
+    @jakarta.validation.constraints.Size(max = 100)
+    private List<@NotNull @jakarta.validation.constraints.Positive Long> voucherIdList;
 }

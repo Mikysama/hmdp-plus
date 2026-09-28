@@ -48,4 +48,5 @@ public class BloomFilterDataInit {
             bloomFilterHandlerFactory.get(BLOOM_FILTER_HANDLER_VOUCHER).add(String.valueOf(seckillVoucher.getVoucherId()));
         }
     }
+    // 方法功能：初始化当前组件需要的脚本、缓存、线程或启动数据。
 }

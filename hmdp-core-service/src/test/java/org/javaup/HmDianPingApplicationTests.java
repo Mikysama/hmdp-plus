@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import static org.javaup.utils.RedisConstants.CACHE_SHOP_KEY;
 import static org.javaup.utils.RedisConstants.SHOP_GEO_KEY;
 
+@org.junit.jupiter.api.Disabled("Legacy test connects to development data. Use isolated org.javaup.seckill tests.")
 @SpringBootTest
 class HmDianPingApplicationTests {
 
@@ -60,12 +61,14 @@ class HmDianPingApplicationTests {
         long end = System.currentTimeMillis();
         System.out.println("time = " + (end - begin));
     }
+    // 方法功能：并发测试 Redis 分布式 ID 生成器的吞吐和唯一性。
 
     @Test
     void testSaveShop() throws InterruptedException {
         Shop shop = shopService.getById(1L);
         cacheClient.setWithLogicalExpire(CACHE_SHOP_KEY + 1L, shop, 10L, TimeUnit.SECONDS);
     }
+    // 方法功能：测试商铺缓存预热和逻辑过期写入。
 
     @Test
     void loadShopData() {
@@ -92,6 +95,7 @@ class HmDianPingApplicationTests {
             stringRedisTemplate.opsForGeo().add(key, locations);
         }
     }
+    // 方法功能：将商铺经纬度数据按类型加载到 Redis GEO。
 
     @Test
     void testHyperLogLog() {
@@ -109,4 +113,5 @@ class HmDianPingApplicationTests {
         Long count = stringRedisTemplate.opsForHyperLogLog().size("hl2");
         System.out.println("count = " + count);
     }
+    // 方法功能：测试 Redis HyperLogLog 的基数统计能力。
 }

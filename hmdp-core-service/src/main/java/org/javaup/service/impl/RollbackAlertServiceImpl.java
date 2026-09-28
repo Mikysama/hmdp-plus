@@ -57,6 +57,7 @@ public class RollbackAlertServiceImpl implements IRollbackAlertService {
             log.warn("发送回滚失败通知异常", e);
         }
     }
+    // 方法功能：按配置发送库存回滚失败告警。
 
     private boolean shouldNotify(Long voucherId) {
         try {
@@ -69,6 +70,7 @@ public class RollbackAlertServiceImpl implements IRollbackAlertService {
             return true;
         }
     }
+    // 方法功能：判断当前业务对象是否应在去重窗口内发送通知。
 
     private String formatContent(RollbackFailureLog rollbackFailureLog) {
         String time = 
@@ -86,4 +88,5 @@ public class RollbackAlertServiceImpl implements IRollbackAlertService {
                 time,
                 rollbackFailureLog.getDetail());
     }
+    // 方法功能：格式化库存回滚失败告警内容。
 }

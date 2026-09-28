@@ -1,16 +1,68 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, ArrowRight, Location, Timer } from '@element-plus/icons-vue'
 import { ElLoading } from 'element-plus'
 import { getShopById } from '@/api/shop'
-import { getVoucherList, issueSeckillAccessToken, seckillVoucher, getSeckillOrderId, getVoucherOrderIdByVoucherId, cancelVoucherOrder, subscribeVoucher, unsubscribeVoucher, getSubscribeStatusBatch } from '@/api/voucher'
+import {
+  getVoucherList,
+  issueSeckillAccessToken,
+  seckillVoucher,
+  getSeckillResult,
+  getVoucherOrderIdByVoucherId,
+  cancelVoucherOrder,
+  subscribeVoucher,
+  unsubscribeVoucher,
+  getSubscribeStatusBatch
+} from '@/api/voucher'
 import { useUserStore } from '@/stores'
+import { getUser } from '@/api/user'
+import {
+  createAttemptStore,
+  isPendingAttempt,
+  isTerminalAttempt,
+  pollAttempt
+} from '@/utils/seckillAttempt'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const rate = ref(4.5)
+const currentUserId = ref(null)
+const attempts = ref({})
+const attemptStore = createAttemptStore(window.localStorage)
+let pageActive = true
+onUnmounted(() => {
+  pageActive = false
+})
+
+// Profile state may refer to another account being viewed; use /me for ownership.
+const ensureCurrentUser = async () => {
+  if (currentUserId.value) return currentUserId.value
+  const response = await getUser()
+  if (!response?.success || !response.data?.id)
+    throw new Error('无法确认登录用户，请重新登录')
+  currentUserId.value = String(response.data.id)
+  return currentUserId.value
+}
+const pendingAttempt = (voucherId) =>
+  isPendingAttempt(attempts.value[String(voucherId)])
+const rememberResult = (voucherId, result) => {
+  const saved = attemptStore.saveResult(currentUserId.value, voucherId, result)
+  attempts.value[String(voucherId)] = saved
+  if (saved?.status === 'SUCCEEDED')
+    purchasedMap.value[String(voucherId)] = true
+  if (saved?.status === 'CANCELLED')
+    purchasedMap.value[String(voucherId)] = false
+  return saved
+}
+const showOutcome = (result) => {
+  if (result?.status === 'SUCCEEDED') ElMessage.success('抢购成功')
+  else if (result?.status === 'FAILED')
+    ElMessage.warning(`本次抢购未成功（${result.reasonCode || '请求已终止'}）`)
+  else if (result?.status === 'CANCELLED') ElMessage.info('该订单已取消')
+  else ElMessage.info('仍在处理中，可点击“查询/重试”继续确认，请勿重复购买')
+}
 
 // 响应式数据
 const shop = ref({})
@@ -37,12 +89,12 @@ const refreshPurchaseStatus = async () => {
         try {
           const res = await getVoucherOrderIdByVoucherId(String(v.id))
           purchasedMap.value[String(v.id)] = !!res?.data
-        } catch (e) {
+        } catch {
           // 忽略单项错误，保持既有状态
         }
       })
     )
-  } catch (e) {
+  } catch {
     // 忽略总体错误
   }
 }
@@ -61,13 +113,9 @@ const refreshSubscribeStatusBatch = async () => {
       const vid = String(item.voucherId)
       const st = Number(item.subscribeStatus)
       map[vid] = Number.isFinite(st) ? st : 0
-      // 若状态为自动发券成功，则本地也标记为已购（双保险）
-      if (st === 2) {
-        purchasedMap.value[vid] = true
-      }
     }
     subscribeStatusMap.value = { ...subscribeStatusMap.value, ...map }
-  } catch (e) {
+  } catch {
     // 静默失败
   }
 }
@@ -76,27 +124,45 @@ const getSubscribeCode = (voucherId) => {
   return Number(subscribeStatusMap.value[String(voucherId)] ?? 0)
 }
 const isSubscribed = (voucherId) => getSubscribeCode(voucherId) === 1
-const isSubscribeSuccess = (voucherId) => getSubscribeCode(voucherId) === 2
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const queryAttempt = async (voucherId, attempt, timeout = 10000) => {
+  const response = await getSeckillResult(voucherId, attempt.requestId, timeout)
+  if (!response?.success || !response.data)
+    throw new Error(response?.errorMsg || '暂时无法确认订单')
+  const result = { ...response.data, requestId: attempt.requestId }
+  rememberResult(voucherId, result)
+  return result
+}
 
-const pollSeckillOrder = async (orderId, { delay = 800, timeoutMs = 11000 } = {}) => {
-  const end = Date.now() + timeoutMs
-  while (Date.now() < end) {
-    try {
-      const { data } = await getSeckillOrderId(String(orderId))
-      if (data) {
-        ElMessage.success('抢购成功')
-        return data
-      }
-    } catch (e) {
-      // 短暂异常，继续重试
+const activePolls = new Map()
+const pollSeckillOrder = (voucherId, attempt) => {
+  const key = `${voucherId}:${attempt.requestId}`
+  if (activePolls.has(key)) return activePolls.get(key)
+  const work = pollAttempt({
+    query: (remainingMs) =>
+      queryAttempt(
+        voucherId,
+        attempt,
+        Math.max(1, Math.min(10000, remainingMs))
+      ),
+    isActive: () => pageActive
+  }).finally(() => activePolls.delete(key))
+  activePolls.set(key, work)
+  return work
+}
+
+const restoreAttempts = async () => {
+  for (const voucher of vouchers.value) {
+    const saved = attemptStore.read(currentUserId.value, voucher.id)
+    if (!saved) continue
+    attempts.value[String(voucher.id)] = saved
+    if (isPendingAttempt(saved)) {
+      // A reload resumes queries and never starts a new purchase intent.
+      void pollSeckillOrder(voucher.id, saved).catch(() => {})
+    } else if (saved.status === 'SUCCEEDED') {
+      void queryAttempt(voucher.id, saved).catch(() => {})
     }
-    const remaining = end - Date.now()
-    await sleep(Math.min(delay, Math.max(0, remaining)))
   }
-  ElMessage.warning('确认订单超时，请稍后在订单页查看')
-  return null
 }
 
 // 获取店铺详情
@@ -121,6 +187,10 @@ const queryVoucher = async (shopId) => {
     await refreshPurchaseStatus()
     // 批量查询订阅状态
     await refreshSubscribeStatusBatch()
+    if (userStore.token) {
+      await ensureCurrentUser()
+      await restoreAttempts()
+    }
   } catch (error) {
     console.error(error)
     ElMessage.error('获取优惠券列表失败')
@@ -169,44 +239,30 @@ const isEnd = (v) => {
   return new Date(v.endTime).getTime() < new Date().getTime()
 }
 
-// 秒杀抢购（先获取令牌，再携带令牌下单）
+// Network retries keep the original persisted requestId.
 const seckill = async (v) => {
   if (!userStore.token) {
     ElMessage.error('请先登录')
-    setTimeout(() => {
-      router.push('/login')
-    }, 200)
+    router.push('/login')
     return
   }
-
-  if (isNotBegin(v)) {
-    ElMessage.error('优惠券抢购尚未开始！')
-    return
-  }
-
-  if (isEnd(v)) {
-    ElMessage.error('优惠券抢购已经结束！')
-    return
-  }
-
-  if (Number(v.stock) < 1) {
-    ElMessage.error('库存不足，请刷新再试试！')
-    return
-  }
-
-  // 已购则禁止重复抢购
-  if (isPurchased(v.id)) {
-    ElMessage.error('您已购买该券，不能重复购买')
-    return
-  }
-
-  let loading = null
+  if (seckillInProgress.value) return
+  let loading
+  let submissionStarted = false
   try {
-    if (seckillInProgress.value) {
-      // 已在确认中，覆盖层仍在，直接返回以避免重复点击
-      return
-    }
     seckillInProgress.value = true
+    await ensureCurrentUser()
+    const previous = attemptStore.read(currentUserId.value, v.id)
+    const resuming = isPendingAttempt(previous)
+    if (!resuming) {
+      if (isNotBegin(v)) return ElMessage.warning('优惠券抢购尚未开始')
+      if (isEnd(v)) return ElMessage.warning('优惠券抢购已经结束')
+      if (isPurchased(v.id)) return ElMessage.warning('您已购买该券')
+      if (Number(v.stock) < 1)
+        return ElMessage.warning('当前库存不足，请稍后刷新')
+    }
+    const attempt = attemptStore.getOrCreate(currentUserId.value, v.id)
+    attempts.value[String(v.id)] = attempt
     loading = ElLoading.service({
       fullscreen: true,
       lock: true,
@@ -214,65 +270,77 @@ const seckill = async (v) => {
       background: 'rgba(0,0,0,0.35)',
       customClass: 'seckill-overlay'
     })
-    // 1）先获取访问令牌
-    const tokenRes = await issueSeckillAccessToken(v.id)
-    if (!tokenRes?.success || !tokenRes?.data) {
-      ElMessage.error(tokenRes?.errorMsg || '令牌获取失败，请稍后重试')
-      return
+    if (resuming || attempt.status === 'SUCCEEDED') {
+      const result = await queryAttempt(v.id, attempt)
+      if (isTerminalAttempt(result)) return showOutcome(result)
+      if (['QUEUED', 'PENDING', 'PROCESSING'].includes(result.status))
+        return showOutcome(await pollSeckillOrder(v.id, attempt))
+      // NOT_FOUND is uncertain; resubmit the same ID with a token.
     }
-    const accessToken = String(tokenRes.data)
-    // 2）携带令牌发起下单
-    const res = await seckillVoucher(v.id, accessToken)
-    // 仅在秒杀接口返回成功时才进行轮询确认订单
-    if (res && res.success) {
-      const order = await pollSeckillOrder(String(res.data), { delay: 800, timeoutMs: 11000 })
-      // 成功拿到订单后，再次查询该券的已购状态并置灰按钮
-      if (order) {
-        try {
-          const check = await getVoucherOrderIdByVoucherId(String(v.id))
-          if (check?.data) {
-            purchasedMap.value[String(v.id)] = true
-          }
-        } catch (e) {
-          // 忽略错误，不影响既有状态
-        }
-      }
-    } else {
-      ElMessage.error(res?.errorMsg || '抢购失败')
-      return
+    const tokenResponse = await issueSeckillAccessToken(v.id)
+    if (!tokenResponse?.success || !tokenResponse?.data) {
+      throw new Error(
+        tokenResponse?.errorMsg || '令牌获取失败，请稍后使用同一请求重试'
+      )
     }
+    submissionStarted = true
+    const response = await seckillVoucher(
+      v.id,
+      attempt.requestId,
+      String(tokenResponse.data)
+    )
+    if (!response?.success || !response.data) {
+      throw new Error(response?.errorMsg || '暂时无法确认受理结果')
+    }
+    const result = { ...response.data, requestId: attempt.requestId }
+    rememberResult(v.id, result)
+    if (result.status === 'QUEUED')
+      loading?.setText('已进入队列，正在等待订单处理…')
+    if (isTerminalAttempt(result)) return showOutcome(result)
+    showOutcome(await pollSeckillOrder(v.id, attempt))
   } catch (error) {
-    console.error(error)
-    ElMessage.error('抢购失败')
+    if (error.status === 401 || error.status === 403)
+      ElMessage.error(error.message)
+    else if (submissionStarted)
+      ElMessage.warning('受理结果暂未确认，请点击“查询/重试”，将沿用原请求')
+    else
+      ElMessage.warning(error.message || '暂时无法确认，请稍后使用原请求重试')
   } finally {
     seckillInProgress.value = false
-    if (loading) loading.close()
+    loading?.close()
   }
 }
 
-// 取消已领取的优惠券
 const cancelVoucher = async (v) => {
   if (!userStore.token) {
-    ElMessage.error('请先登录')
-    setTimeout(() => {
-      router.push('/login')
-    }, 200)
+    router.push('/login')
     return
   }
   if (!v?.id) return
   try {
-    const res = await cancelVoucherOrder(String(v.id))
-    if (res?.success && String(res.data) === 'true') {
-      ElMessage.success('已取消领取')
-      // 更新本地状态并刷新列表以同步库存
-      purchasedMap.value[String(v.id)] = false
-      await queryVoucher(route.params.id)
-    } else {
-      ElMessage.error(res?.errorMsg || '取消失败')
+    await ensureCurrentUser()
+    const owned = await getVoucherOrderIdByVoucherId(String(v.id))
+    if (!owned?.success || !owned.data) {
+      const previous = attemptStore.read(currentUserId.value, v.id)
+      if (previous) await queryAttempt(v.id, previous)
+      await refreshPurchaseStatus()
+      return ElMessage.warning('未找到可取消的订单，请刷新后确认')
     }
+    const orderId = String(owned.data)
+    const response = await cancelVoucherOrder(String(v.id), orderId)
+    if (response?.success && response.data?.status === 'CANCELLED') {
+      if (response.data.requestId) rememberResult(v.id, response.data)
+      attempts.value[String(v.id)] = attemptStore.markCancelled(
+        currentUserId.value,
+        v.id,
+        orderId
+      )
+      purchasedMap.value[String(v.id)] = false
+      ElMessage.success('已取消领取')
+      await queryVoucher(route.params.id)
+    } else ElMessage.error(response?.errorMsg || '取消结果暂未确认，请稍后重试')
   } catch (error) {
-    console.error(error)
-    ElMessage.error('取消失败')
+    ElMessage.warning(error.message || '取消结果暂未确认，请稍后重试')
   }
 }
 
@@ -292,7 +360,7 @@ const subscribeToVoucher = async (v) => {
     } else {
       ElMessage.error(res?.errorMsg || '订阅失败')
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('订阅失败')
   }
 }
@@ -313,7 +381,7 @@ const unsubscribeFromVoucher = async (v) => {
     } else {
       ElMessage.error(res?.errorMsg || '取消订阅失败')
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('取消订阅失败')
   }
 }
@@ -325,7 +393,9 @@ const goBack = () => {
 
 // 过滤后的优惠券列表
 const filteredVouchers = computed(() => {
-  return vouchers.value.filter((v) => !isEnd(v))
+  return vouchers.value.filter(
+    (v) => !isEnd(v) || pendingAttempt(v.id) || isPurchased(v.id)
+  )
 })
 
 // 初始化
@@ -441,10 +511,17 @@ onMounted(() => {
           <div v-if="v.type" class="seckill-box">
             <div
               class="voucher-btn"
-              :class="{ 'disable-btn': isNotBegin(v) || v.stock < 1 || isPurchased(v.id) }"
+              :class="{
+                'disable-btn':
+                  !pendingAttempt(v.id) &&
+                  (isNotBegin(v) || v.stock < 1 || isPurchased(v.id))
+              }"
               @click="seckill(v)"
             >
-              限时抢购
+              {{ pendingAttempt(v.id) ? '查询/重试' : '限时抢购' }}
+            </div>
+            <div v-if="pendingAttempt(v.id)" class="subscribe-tip">
+              订单仍在确认中，重试将沿用原请求
             </div>
             <div class="seckill-stock">
               剩余 <span>{{ v.stock }}</span> 张
@@ -452,16 +529,27 @@ onMounted(() => {
             <div class="seckill-time">{{ formatTime(v) }}</div>
             <div v-if="isPurchased(v.id)" class="seckill-status">
               <span class="purchased-tag">已购</span>
-              <span class="cancel-link" @click="cancelVoucher(v)">取消领取</span>
+              <span class="cancel-link" @click="cancelVoucher(v)"
+                >取消领取</span
+              >
             </div>
             <!-- 库存为 0 且未购买时，展示订阅到券提醒 -->
-            <div v-else-if="Number(v.stock) < 1 && !isPurchased(v.id)" class="subscribe-box">
+            <div
+              v-else-if="Number(v.stock) < 1 && !isPurchased(v.id)"
+              class="subscribe-box"
+            >
               <div v-if="isSubscribed(v.id)" class="subscribe-status">
                 <span class="subscribed-tag">已订阅到券提醒</span>
-                <span class="cancel-subscribe" @click="unsubscribeFromVoucher(v)">取消订阅</span>
+                <span
+                  class="cancel-subscribe"
+                  @click="unsubscribeFromVoucher(v)"
+                  >取消订阅</span
+                >
               </div>
               <div v-else class="subscribe-status">
-                <span class="subscribe-link" @click="subscribeToVoucher(v)">到券提醒</span>
+                <span class="subscribe-link" @click="subscribeToVoucher(v)"
+                  >到券提醒</span
+                >
               </div>
             </div>
           </div>

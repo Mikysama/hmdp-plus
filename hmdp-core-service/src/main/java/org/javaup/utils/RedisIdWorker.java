@@ -28,6 +28,7 @@ public class RedisIdWorker {
     public RedisIdWorker(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
+    // 方法功能：初始化 RedisIdWorker 实例并设置必要依赖或父类参数。
 
     public long nextId(String keyPrefix) {
         // 1.生成时间戳
@@ -44,4 +45,5 @@ public class RedisIdWorker {
         // 3.拼接并返回
         return timestamp << COUNT_BITS | count;
     }
+    // 方法功能：基于 Redis 自增序列和时间戳生成全局唯一 ID。
 }

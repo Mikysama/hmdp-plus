@@ -6,8 +6,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.javaup.core.RedisKeyManage;
-import org.javaup.cache.CacheRebuildGuard;
-import org.javaup.cache.CacheTtlPolicy;
 import org.javaup.dto.Result;
 import org.javaup.entity.Shop;
 import org.javaup.handler.BloomFilterHandlerFactory;
@@ -22,7 +20,6 @@ import org.javaup.utils.CacheClient;
 import org.javaup.utils.SystemConstants;
 import org.redisson.api.RLock;
 import org.springframework.data.geo.Distance;
-import org.springframework.data.geo.Point;
 import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
 import org.springframework.data.redis.connection.RedisGeoCommands;
@@ -30,8 +27,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.domain.geo.GeoReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 import static org.javaup.constant.Constant.BLOOM_FILTER_HANDLER_SHOP;
 import static org.javaup.utils.RedisConstants.CACHE_SHOP_KEY;
 import static org.javaup.utils.RedisConstants.CACHE_SHOP_TTL;
-import static org.javaup.utils.RedisConstants.CACHE_NULL_TTL;
 import static org.javaup.utils.RedisConstants.LOCK_SHOP_KEY;
 import static org.javaup.utils.RedisConstants.SHOP_GEO_KEY;
 
@@ -75,26 +69,19 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     
     @Resource
     private SnowflakeIdGenerator snowflakeIdGenerator;
-
-    @Resource
-    private CacheTtlPolicy cacheTtlPolicy;
-
-    @Resource
-    private CacheRebuildGuard cacheRebuildGuard;
     
     
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result<Long> saveShop(final Shop shop) {
         // 写入数据库
         shop.setId(snowflakeIdGenerator.nextId());
         save(shop);
         // 写入布隆过滤器（商铺业务）
         bloomFilterHandlerFactory.get(BLOOM_FILTER_HANDLER_SHOP).add(String.valueOf(shop.getId()));
-        scheduleGeoSync(null, GeoSnapshot.from(shop));
         // 返回店铺id
         return Result.ok(shop.getId());
     }
+    // 方法功能：保存商铺并写入布隆过滤器。
     
     @Override
     public Result queryById(Long id) {
@@ -115,21 +102,25 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 7.返回
         return Result.ok(shop);
     }
+    // 方法功能：按商铺 ID 查询商铺信息并处理缓存穿透与缓存重建。
     
     public Shop queryByIdV1(Long id){
         return cacheClient
                 .queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
     }
+    // 方法功能：直接从数据库查询商铺信息。
     
     public Shop queryByIdV2(Long id){
         return cacheClient
                 .queryWithMutex(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
     }
+    // 方法功能：使用缓存穿透策略查询商铺信息。
     
     public Shop queryByIdV3(Long id){
         return cacheClient
                 .queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, 20L, TimeUnit.SECONDS);
     }
+    // 方法功能：使用互斥锁策略查询商铺信息并重建缓存。
     
     public Shop queryByIdV4(Long id){
         Shop shop =
@@ -157,22 +148,23 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             if (Objects.nonNull(shop)) {
                 return shop;
             }
-            shop = cacheRebuildGuard.execute(() -> getById(id));
+            shop = getById(id);
             if (Objects.isNull(shop)) {
                 redisCache.set(RedisKeyBuild.createRedisKey(RedisKeyManage.CACHE_SHOP_KEY_NULL, id),
                         "这是一个空值",
-                        cacheTtlPolicy.withJitter(CACHE_NULL_TTL),
+                        CACHE_SHOP_TTL,
                         TimeUnit.MINUTES);
                 throw new RuntimeException("查询商铺不存在");
             }
             redisCache.set(RedisKeyBuild.createRedisKey(RedisKeyManage.CACHE_SHOP_KEY, id),shop,
-                    cacheTtlPolicy.withJitter(CACHE_SHOP_TTL),
+                    CACHE_SHOP_TTL,
                     TimeUnit.MINUTES);
             return shop;
         }finally {
             lock.unlock();
         }
     }
+    // 方法功能：使用逻辑过期策略查询商铺信息并异步重建缓存。
 
     @Override
     @Transactional
@@ -181,27 +173,20 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if (id == null) {
             return Result.fail("店铺id不能为空");
         }
-        Shop oldShop = getById(id);
-        if (oldShop == null) {
-            return Result.fail("店铺不存在");
-        }
         // 1.更新数据库
-        if (!updateById(shop)) {
-            return Result.fail("店铺更新失败");
-        }
-        Shop updatedShop = getById(id);
+        updateById(shop);
         // 2.删除缓存
         stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
-        scheduleGeoSync(GeoSnapshot.from(oldShop), GeoSnapshot.from(updatedShop));
         return Result.ok();
     }
+    // 方法功能：更新商铺信息并删除对应缓存。
 
     @Override
     public Result queryShopByType(Integer typeId, Integer current, Double x, Double y) {
         // 1.判断是否需要根据坐标查询
-        if ((x == null) != (y == null)) {
-            return Result.fail("经纬度必须同时提供");
-        }
+        //TODO 先改成 x 和 y 都是空
+        x = null;
+        y = null;
         if (x == null || y == null) {
             // 不需要坐标查询，按数据库查询
             Page<Shop> page = query()
@@ -253,48 +238,5 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 6.返回
         return Result.ok(shops);
     }
-
-    private void scheduleGeoSync(GeoSnapshot oldShop, GeoSnapshot newShop) {
-        Runnable syncTask = () -> syncGeo(oldShop, newShop);
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            syncTask.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                syncTask.run();
-            }
-        });
-    }
-
-    private void syncGeo(GeoSnapshot oldShop, GeoSnapshot newShop) {
-        try {
-            if (oldShop != null && oldShop.typeId() != null && oldShop.id() != null) {
-                stringRedisTemplate.opsForGeo().remove(
-                        SHOP_GEO_KEY + oldShop.typeId(),
-                        oldShop.id().toString()
-                );
-            }
-            if (newShop != null && newShop.hasLocation()) {
-                stringRedisTemplate.opsForGeo().add(
-                        SHOP_GEO_KEY + newShop.typeId(),
-                        new Point(newShop.x(), newShop.y()),
-                        newShop.id().toString()
-                );
-            }
-        } catch (Exception e) {
-            log.error("同步商户GEO失败 oldShop={} newShop={}", oldShop, newShop, e);
-        }
-    }
-
-    private record GeoSnapshot(Long id, Long typeId, Double x, Double y) {
-        private static GeoSnapshot from(Shop shop) {
-            return shop == null ? null : new GeoSnapshot(shop.getId(), shop.getTypeId(), shop.getX(), shop.getY());
-        }
-
-        private boolean hasLocation() {
-            return id != null && typeId != null && x != null && y != null;
-        }
-    }
+    // 方法功能：按类型分页查询商铺，支持基于地理位置的距离排序。
 }

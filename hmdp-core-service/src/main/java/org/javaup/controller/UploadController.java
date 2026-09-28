@@ -38,6 +38,7 @@ public class UploadController {
             throw new RuntimeException("文件上传失败", e);
         }
     }
+    // 方法功能：保存上传图片文件并返回可访问路径。
 
     @GetMapping("/blog/delete")
     public Result deleteBlogImg(@RequestParam("name") String filename) {
@@ -48,6 +49,7 @@ public class UploadController {
         FileUtil.del(file);
         return Result.ok();
     }
+    // 方法功能：删除指定博客图片文件。
 
     private String createNewFileName(String originalFilename) {
         // 获取后缀
@@ -65,4 +67,5 @@ public class UploadController {
         // 生成文件名
         return StrUtil.format("/blogs/{}/{}/{}.{}", d1, d2, name, suffix);
     }
+    // 方法功能：基于原始文件名生成分散目录下的唯一图片文件名。
 }

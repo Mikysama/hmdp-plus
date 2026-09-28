@@ -5,8 +5,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.javaup.cache.SeckillVoucherLocalCache;
-import org.javaup.cache.CacheRebuildGuard;
-import org.javaup.cache.CacheTtlPolicy;
 import org.javaup.core.RedisKeyManage;
 import org.javaup.entity.SeckillVoucher;
 import org.javaup.entity.Voucher;
@@ -61,12 +59,6 @@ public class SeckillVoucherServiceImpl extends ServiceImpl<SeckillVoucherMapper,
     
     @Resource
     private IVoucherService voucherService;
-
-    @Resource
-    private CacheTtlPolicy cacheTtlPolicy;
-
-    @Resource
-    private CacheRebuildGuard cacheRebuildGuard;
     
     @Override
     @ServiceLock(lockType= LockType.Read,name = UPDATE_SECKILL_VOUCHER_LOCK,keys = {"#voucherId"})
@@ -106,22 +98,19 @@ public class SeckillVoucherServiceImpl extends ServiceImpl<SeckillVoucherMapper,
             if (existResult){
                 throw new RuntimeException("查询优惠券不存在");
             }
-            SeckillVoucher seckillVoucher = cacheRebuildGuard.execute(
-                    () -> lambdaQuery().eq(SeckillVoucher::getVoucherId, voucherId).one());
+            SeckillVoucher seckillVoucher = lambdaQuery().eq(SeckillVoucher::getVoucherId,voucherId).one();
             if (Objects.isNull(seckillVoucher)) {
                 redisCache.set(seckillVoucherNullRedisKey,
                         "这是一个空值",
-                        cacheTtlPolicy.withJitter(CACHE_NULL_TTL),
+                        CACHE_NULL_TTL,
                         TimeUnit.MINUTES);
                 throw new RuntimeException("查询秒杀优惠券不存在");
             }
-            long secondsUntilEnd = Math.max(
+            long ttlSeconds = Math.max(
                     LocalDateTimeUtil.between(LocalDateTimeUtil.now(), seckillVoucher.getEndTime()).getSeconds(),
                     1L
             );
-            long ttlSeconds = cacheTtlPolicy.forSeckillVoucher(secondsUntilEnd);
-            Voucher voucher = cacheRebuildGuard.execute(
-                    () -> voucherService.lambdaQuery().eq(Voucher::getId, voucherId).one());
+            Voucher voucher = voucherService.lambdaQuery().eq(Voucher::getId, voucherId).one();
             seckillVoucherFullModel = new SeckillVoucherFullModel();
             BeanUtils.copyProperties(seckillVoucher, seckillVoucherFullModel);
             seckillVoucherFullModel.setShopId(voucher.getShopId());
@@ -139,6 +128,7 @@ public class SeckillVoucherServiceImpl extends ServiceImpl<SeckillVoucherMapper,
             lock.unlock();
         }
     }
+    // 方法功能：查询秒杀券完整信息，优先使用本地缓存并回源加载。
     
     @Override
     @ServiceLock(lockType= LockType.Read,name = UPDATE_SECKILL_VOUCHER_STOCK_LOCK,keys = {"#voucherId"})
@@ -177,10 +167,12 @@ public class SeckillVoucherServiceImpl extends ServiceImpl<SeckillVoucherMapper,
             lock.unlock();
         }
     }
+    // 方法功能：将秒杀券库存和规则信息加载到 Redis。
     
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean rollbackStock(final Long voucherId) {
         return seckillVoucherMapper.rollbackStock(voucherId) > 0;
     }
+    // 方法功能：回滚数据库中的秒杀券库存。
 }

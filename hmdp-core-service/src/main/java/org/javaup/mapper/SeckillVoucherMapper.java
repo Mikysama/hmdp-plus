@@ -1,6 +1,7 @@
 package org.javaup.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 import org.javaup.entity.SeckillVoucher;
@@ -10,8 +11,15 @@ import org.javaup.entity.SeckillVoucher;
  * @description: 秒杀优惠券表，与优惠券是一对一关系 Mapper
  * @author: 阿星不是程序员
  **/
+@Mapper
 public interface SeckillVoucherMapper extends BaseMapper<SeckillVoucher> {
    
+    /**
+     * 回滚指定秒杀券的数据库库存。
+     *
+     * @param voucherId 秒杀券对应的优惠券 ID
+     * @return 受影响行数
+     */
     @Update("UPDATE tb_seckill_voucher SET stock = stock + 1,update_time = NOW() WHERE voucher_id = #{voucherId}")
     Integer rollbackStock(@Param("voucherId")Long voucherId);
 

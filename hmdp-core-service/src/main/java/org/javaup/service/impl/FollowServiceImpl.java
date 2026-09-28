@@ -63,6 +63,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
         }
         return Result.ok();
     }
+    // 方法功能：关注或取关目标用户并维护 Redis 关注集合。
 
     @Override
     public Result isFollow(Long followUserId) {
@@ -73,6 +74,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
         // 3.判断
         return Result.ok(count > 0);
     }
+    // 方法功能：判断当前用户是否关注目标用户。
 
     @Override
     public Result followCommons(Long id) {
@@ -95,4 +97,5 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
                 .collect(Collectors.toList());
         return Result.ok(users);
     }
+    // 方法功能：查询当前用户与目标用户的共同关注列表。
 }

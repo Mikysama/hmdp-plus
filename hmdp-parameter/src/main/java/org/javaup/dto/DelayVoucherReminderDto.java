@@ -29,5 +29,6 @@ public class DelayVoucherReminderDto implements Serializable {
      * 延迟时间，单位秒
      * */
     @NotNull
+    @jakarta.validation.constraints.PositiveOrZero
     private Integer delaySeconds;
 }

@@ -1,6 +1,7 @@
 package org.javaup.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -73,5 +74,16 @@ public class BlogComments implements Serializable {
      */
     private LocalDateTime updateTime;
 
+    /**
+     * 用户昵称
+     */
+    @TableField(exist = false)
+    private String name;
+
+    /**
+     * 用户头像
+     */
+    @TableField(exist = false)
+    private String icon;
 
 }

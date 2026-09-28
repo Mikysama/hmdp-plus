@@ -1,0 +1,13 @@
+[Unit]
+Description=HMDP Kafka broker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lymzhao/workspace/hmdp-plus-master
+ExecStart=/usr/bin/java -Xms512m -Xmx1g -Dlog4j.configuration=file:/home/lymzhao/workspace/hmdp-plus-master/deploy/kafka-log4j.properties -cp /home/lymzhao/workspace/hmdp-plus-master/.runtime/kafka/libs/* kafka.Kafka /home/lymzhao/workspace/hmdp-plus-master/deploy/kafka-server.properties
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

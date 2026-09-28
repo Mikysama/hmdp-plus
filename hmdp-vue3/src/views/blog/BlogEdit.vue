@@ -3,7 +3,6 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, Search } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores'
-import { getUser } from '@/api/user'
 import {
   uploadBlogImage,
   deleteBlogImage,
@@ -28,31 +27,22 @@ const shopName = ref('') // 商户名称
 const selectedShop = ref({}) // 选中的商户
 
 // 生命周期钩子
-onMounted(async () => {
-  if (await checkLogin()) {
-    queryShops()
-  }
+onMounted(() => {
+  checkLogin()
+  queryShops()
 })
 
 // 方法定义
-const checkLogin = async () => {
+const checkLogin = () => {
+  // 获取token
   const token = userStore.getToken()
   if (!token) {
     router.push('/login')
-    return false
+    return
   }
-  try {
-    const { data } = await getUser()
-    if (!data) {
-      throw new Error('用户信息不存在')
-    }
-    userStore.setUserInfo(data)
-    return true
-  } catch {
-    userStore.resetSession()
-    router.push('/login')
-    return false
-  }
+
+  // TODO: 查询用户信息
+  // 这里可以添加获取用户信息的API调用
 }
 
 const queryShops = () => {

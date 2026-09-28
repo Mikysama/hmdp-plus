@@ -6,15 +6,18 @@ export const issueSeckillAccessToken = (id) =>
   request.get('/voucher-order/seckill/token/' + id)
 
 // 携带令牌进行秒杀下单
-export const seckillVoucher = (id, accessToken) =>
-  request.post(`/voucher-order/seckill/${id}`,
-    null,
-    { params: { accessToken } }
+export const seckillVoucher = (id, requestId, accessToken) =>
+  request.post(
+    `/voucher-order/seckill/${id}`,
+    { requestId, accessToken },
+    { silentError: true }
   )
-// 轮询查询秒杀订单是否生成
-export const getSeckillOrderId = (orderId) =>
-  request.post('/voucher-order/get/seckill/voucher/order-id', {
-    orderId: String(orderId)
+// NOT_FOUND 表示未确认，不能当作失败或生成新请求ID。
+export const getSeckillResult = (voucherId, requestId, timeout = 10000) =>
+  request.get('/voucher-order/seckill/result', {
+    params: { voucherId: String(voucherId), requestId },
+    silentError: true,
+    timeout
   })
 
 // 进入页面或秒杀成功后，查询用户是否已购买该优惠券
@@ -24,9 +27,10 @@ export const getVoucherOrderIdByVoucherId = (voucherId) =>
   })
 
 // 取消已领取的优惠券
-export const cancelVoucherOrder = (voucherId) =>
+export const cancelVoucherOrder = (voucherId, orderId) =>
   request.post('/voucher-order/cancel', {
-    voucherId: String(voucherId)
+    voucherId: String(voucherId),
+    orderId: String(orderId)
   })
 
 // 订阅到券提醒（加入自动发券队列）

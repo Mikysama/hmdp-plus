@@ -39,6 +39,7 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
     public SeckillVoucherInvalidationProducer(final KafkaTemplate<String, MessageExtend<SeckillVoucherInvalidationMessage>> kafkaTemplate) {
         super(kafkaTemplate);
     }
+    // 方法功能：初始化 SeckillVoucherInvalidationProducer 实例并设置必要依赖或父类参数。
    
     @Resource
     private MeterRegistry meterRegistry;
@@ -108,6 +109,7 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
             safeInc("seckill_invalidation_send_dlq_failures", "topic", topic);
         }
     }
+    // 方法功能：处理消息发送失败后的重试、死信和审计记录。
     
     @Override
     protected void afterSendSuccess(SendResult<String, MessageExtend<SeckillVoucherInvalidationMessage>> result) {
@@ -122,6 +124,7 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
                     topic, message.getUuid(), message.getKey(), message.getMessageBody().getVoucherId());
         }
     }
+    // 方法功能：记录缓存失效消息发送成功的审计日志和监控指标。
 
     private String truncate(String s) {
         if (s == null) {
@@ -129,6 +132,7 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
         }
         return s.length() <= 256 ? s : s.substring(0, 256);
     }
+    // 方法功能：截断过长字符串，避免日志或消息字段超限。
     
     private void sleepQuietly(long backoffMs) {
         try {
@@ -137,6 +141,7 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
             Thread.currentThread().interrupt();
         }
     }
+    // 方法功能：按指定时间休眠并保留线程中断状态。
     
     private void safeInc(String name, String tagKey, String tagValue) {
         try {
@@ -146,4 +151,5 @@ public class SeckillVoucherInvalidationProducer extends AbstractProducerHandler<
         } catch (Exception ignore) {
         }
     }
+    // 方法功能：安全递增监控指标，避免指标异常影响主流程。
 }

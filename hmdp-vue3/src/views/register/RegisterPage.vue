@@ -21,6 +21,7 @@ const sendCode = async () => {
   try {
     await formRef.value.validateField('phone')
     const res = await userGetCode(form.value.phone)
+    console.log('发送验证码:', res.data)
     form.value.code = res.data
 
     disabled.value = true
@@ -48,6 +49,7 @@ const login = async () => {
   try {
     await formRef.value.validate()
     const res = await userLogin(form.value)
+    console.log('注册成功token:', res.data)
     userStore.setToken(res.data)
     ElMessage.success('登录成功')
     router.push('/index')

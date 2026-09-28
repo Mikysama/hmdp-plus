@@ -4,14 +4,12 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
-import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.javaup.core.RedisKeyManage;
 import org.javaup.dto.LoginFormDTO;
-import org.javaup.dto.PasswordResetFormDTO;
 import org.javaup.dto.Result;
 import org.javaup.dto.UserDTO;
 import org.javaup.entity.User;
@@ -25,19 +23,15 @@ import org.javaup.service.IUserPhoneService;
 import org.javaup.service.IUserService;
 import org.javaup.toolkit.SnowflakeIdGenerator;
 import org.javaup.utils.RegexUtils;
-import org.javaup.utils.PasswordEncoder;
 import org.javaup.utils.UserHolder;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -57,14 +51,6 @@ import static org.javaup.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 @Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
-
-    private static final DefaultRedisScript<Long> CONSUME_LOGIN_CODE_SCRIPT;
-
-    static {
-        CONSUME_LOGIN_CODE_SCRIPT = new DefaultRedisScript<>();
-        CONSUME_LOGIN_CODE_SCRIPT.setLocation(new ClassPathResource("lua/consumeLoginCode.lua"));
-        CONSUME_LOGIN_CODE_SCRIPT.setResultType(Long.class);
-    }
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -99,108 +85,65 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 返回ok
         return Result.ok(code);
     }
+    // 方法功能：校验手机号并发送登录验证码。
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result<String> login(LoginFormDTO loginForm, HttpSession session) {
-        if (loginForm == null) {
-            return Result.fail("登录参数不能为空");
-        }
+        // 1.校验手机号
         String phone = loginForm.getPhone();
         if (RegexUtils.isPhoneInvalid(phone)) {
+            // 2.如果不符合，返回错误信息
             return Result.fail("手机号格式错误！");
         }
-        boolean hasCode = StrUtil.isNotBlank(loginForm.getCode());
-        boolean hasPassword = StrUtil.isNotBlank(loginForm.getPassword());
-        if (hasCode == hasPassword) {
-            return Result.fail("验证码和密码必须且只能提供一种");
+        // 3.从redis获取验证码并校验
+        String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
+        String code = loginForm.getCode();
+        if (cacheCode == null || !cacheCode.equals(code)) {
+            // 不一致，报错
+            return Result.fail("验证码错误");
         }
 
-        User user;
-        if (hasCode) {
-            if (!consumeLoginCode(phone, loginForm.getCode())) {
-                return Result.fail("验证码错误或已失效");
-            }
-            user = findUserByPhone(phone);
-            if (user == null) {
-                user = createUserWithPhone(phone);
-            }
-        } else {
-            user = findUserByPhone(phone);
-            if (user == null || !PasswordEncoder.matches(user.getPassword(), loginForm.getPassword())) {
-                return Result.fail("手机号或密码错误");
-            }
-        }
-
-        String token = createLoginSession(user);
-        try {
-            maintainLevelSetMembership(user.getId());
-        } catch (Exception e) {
-            log.warn("维护用户等级集合失败 userId={}", user.getId(), e);
-        }
-        return Result.ok(token);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Result<Void> resetPassword(PasswordResetFormDTO passwordResetForm) {
-        String phone = passwordResetForm.getPhone();
-        if (!consumeLoginCode(phone, passwordResetForm.getCode())) {
-            return Result.fail("验证码错误或已失效");
-        }
-        User user = findUserByPhone(phone);
-        if (user == null) {
-            user = createUserWithPhone(phone);
-        }
-        boolean updated = lambdaUpdate()
-                .set(User::getPassword, PasswordEncoder.encode(passwordResetForm.getNewPassword()))
-                .eq(User::getId, user.getId())
-                .update();
-        return updated ? Result.ok() : Result.fail("密码设置失败");
-    }
-
-    @Override
-    public Result<Void> logout(String token) {
-        if (StrUtil.isNotBlank(token)) {
-            stringRedisTemplate.delete(LOGIN_USER_KEY + token.trim());
-        }
-        UserHolder.removeUser();
-        return Result.ok();
-    }
-
-    private boolean consumeLoginCode(String phone, String code) {
-        Long result = stringRedisTemplate.execute(
-                CONSUME_LOGIN_CODE_SCRIPT,
-                Collections.singletonList(LOGIN_CODE_KEY + phone),
-                code
-        );
-        return Long.valueOf(1L).equals(result);
-    }
-
-    private User findUserByPhone(String phone) {
+        // 4.根据手机号查询用户
         UserPhone userPhone = userPhoneService.lambdaQuery().eq(UserPhone::getPhone, phone).one();
-        if (userPhone == null) {
-            return null;
-        }
-        return getById(userPhone.getUserId());
-    }
 
-    private String createLoginSession(User user) {
+        User user = null;
+        // 5.判断用户是否存在
+        if (userPhone == null) {
+            // 6.不存在，创建新用户并保存
+            user = createUserWithPhone(phone);
+        }else {
+            user = lambdaQuery().eq(User::getPhone, userPhone.getPhone()).one();
+        }
+
+        // 7.保存用户信息到 redis中
+        // 7.1.随机生成token，作为登录令牌
         String token = UUID.randomUUID().toString(true);
+        // 7.2.将User对象转为HashMap存储
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
                 CopyOptions.create()
                         .setIgnoreNullValue(true)
                         .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+        // 7.3.存储
         String tokenKey = LOGIN_USER_KEY + token;
         stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
+        // 7.4.设置token有效期（按秒设置，避免 Redisson pExpire 递归问题）
         stringRedisTemplate.expire(
                 tokenKey,
                 TimeUnit.SECONDS.convert(LOGIN_USER_TTL, TimeUnit.MINUTES),
                 TimeUnit.SECONDS
         );
-        return token;
+
+        // 8.返回token
+        try {
+            maintainLevelSetMembership(user.getId());
+        } catch (Exception e) {
+            // 忽略异常，避免影响登录
+        }
+        return Result.ok(token);
     }
+    // 方法功能：校验登录信息，创建或读取用户并签发登录 token。
 
     @Override
     public Result<Void> sign() {
@@ -217,6 +160,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.opsForValue().setBit(key, dayOfMonth - 1, true);
         return Result.ok();
     }
+    // 方法功能：记录当前用户当天签到。
 
     @Override
     public Result<Integer> signCount() {
@@ -259,6 +203,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         return Result.ok(count);
     }
+    // 方法功能：统计当前用户连续签到天数。
     
     private User createUserWithPhone(String phone) {
         // 1.创建用户
@@ -287,6 +232,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         userPhoneService.save(userPhone);
         return user;
     }
+    // 方法功能：根据手机号创建新用户及其扩展资料。
     
     private void maintainLevelSetMembership(Long userId) {
         if (userId == null) {
@@ -302,4 +248,5 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                 userId
         );
     }
+    // 方法功能：维护用户在 Redis 会员等级集合中的归属关系。
 }

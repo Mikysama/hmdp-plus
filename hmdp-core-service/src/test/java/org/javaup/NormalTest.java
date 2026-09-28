@@ -40,4 +40,5 @@ public class NormalTest {
         System.out.println("time2 = " + (t4 - t3));
         System.out.println("count2 = " + count2);
     }
+    // 方法功能：演示位图状态写入、读取和二进制输出。
 }

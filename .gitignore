@@ -4,6 +4,7 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 logs/
+.runtime/
 
 **/dependency-reduced-pom.xml
 
@@ -40,7 +41,6 @@ build/
 
 CLAUDE.md
 
-# Local/runtime artifacts
-ObjectStore/
-{{HOMEBREW_PREFIX}}/
-{{pkgetc}}/
+# Local verification caches
+.m2/
+**/__pycache__/

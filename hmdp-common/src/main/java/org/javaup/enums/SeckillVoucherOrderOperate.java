@@ -13,8 +13,6 @@ public enum SeckillVoucherOrderOperate {
      * */
     NO(0, "不删除"),
     YES(1, "删除"),
-
-    CANCEL(2, "取消已提交订单"),
     ;
     
     @Getter

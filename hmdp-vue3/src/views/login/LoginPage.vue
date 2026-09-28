@@ -18,11 +18,15 @@ const goBack = () => {
 }
 
 const login = async () => {
+  console.log('登录功能待实现')
   try {
     await formRef.value.validate()
     const res = await userLogin(form.value)
+    console.log('登录成功:', res)
+    console.log('登录成功token:', res.data)
     if (res.data) {
       userStore.setToken(res.data)
+      console.log('token已设置:', userStore.getToken())
       ElMessage.success('登录成功')
       router.push('/index')
     } else {
@@ -46,7 +50,7 @@ const rules = {
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 8, max: 64, message: '密码长度必须为8到64位', trigger: 'blur' }
+    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
   ],
   radio: [
     {
@@ -88,7 +92,7 @@ const rules = {
           </el-input>
         </el-form-item>
         <div style="text-align: center; color: #8c939d; margin: 5px 0">
-          <router-link to="/password/reset">设置/忘记密码</router-link>
+          <a href="javascript:void(0)">忘记密码</a>
         </div>
         <el-button
           @click="login"

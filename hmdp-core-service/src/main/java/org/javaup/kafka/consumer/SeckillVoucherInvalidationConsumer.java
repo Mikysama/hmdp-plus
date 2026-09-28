@@ -50,6 +50,7 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
     public SeckillVoucherInvalidationConsumer() {
         super(SeckillVoucherInvalidationMessage.class);
     }
+    // 方法功能：初始化 SeckillVoucherInvalidationConsumer 实例并设置必要依赖或父类参数。
     
     @KafkaListener(
             topics = {SPRING_INJECT_PREFIX_DISTINCTION_NAME + "-" + SECKILL_VOUCHER_CACHE_INVALIDATION_TOPIC},
@@ -64,6 +65,7 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
             acknowledgment.acknowledge();
         }
     }
+    // 方法功能：接收 Kafka 原始消息，委托统一消费流程处理并提交确认。
     
     @Override
     protected void doConsume(MessageExtend<SeckillVoucherInvalidationMessage> message) {
@@ -76,6 +78,7 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
         
         ((SeckillVoucherInvalidationConsumer) AopContext.currentProxy()).delCache(voucherId);
     }
+    // 方法功能：执行消息消费的核心业务处理。
     
     @ServiceLock(lockType= LockType.Write,name = UPDATE_SECKILL_VOUCHER_LOCK,keys = {"#voucherId"})
     public void delCache(Long voucherId){
@@ -88,6 +91,7 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
         redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_NULL_TAG_KEY, voucherId));
         
     }
+    // 方法功能：删除指定秒杀券的本地缓存和 Redis 缓存。
     
     @Override
     protected void afterConsumeFailure(final MessageExtend<SeckillVoucherInvalidationMessage> message, final Throwable throwable) {
@@ -95,6 +99,7 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
         log.warn("删除Redis缓存失败 voucherId={}", message.getMessageBody().getVoucherId(), throwable);
         safeInc(errorTag(throwable));
     }
+    // 方法功能：处理消息消费失败后的指标记录、补偿或异常审计。
     
     private void safeInc(String tagValue) {
         try {
@@ -104,8 +109,10 @@ public class SeckillVoucherInvalidationConsumer extends AbstractConsumerHandler<
         } catch (Exception ignore) {
         }
     }
+    // 方法功能：安全递增监控指标，避免指标异常影响主流程。
 
     private String errorTag(Throwable t) {
         return t == null ? "unknown" : t.getClass().getSimpleName();
     }
+    // 方法功能：将异常类型转换为监控标签。
 }

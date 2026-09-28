@@ -16,11 +16,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>3.18.0</version>
-        </dependency>
-        <dependency>
             <groupId>org.javaup</groupId>
             <artifactId>hmdp-common</artifactId>
             <version>${revision}</version>
@@ -36,7 +31,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-jdbc</artifactId>
+            <artifactId>shardingsphere-jdbc-core</artifactId>
             <version>${shardingsphere.version}</version>
             <exclusions>
                 <exclusion>
@@ -44,61 +39,6 @@
                     <groupId>ch.qos.logback</groupId>
                 </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-infra-url-classpath</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-sharding-core</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-broadcast-core</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-infra-data-source-pool-hikari</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-standalone-mode-core</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-standalone-mode-repository-jdbc</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-authority-core</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-authority-simple</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-jdbc-dialect-mysql</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-transaction-xa-core</artifactId>
-            <version>${shardingsphere.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-transaction-xa-atomikos</artifactId>
-            <version>${shardingsphere.version}</version>
         </dependency>
     </dependencies>
     

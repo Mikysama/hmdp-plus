@@ -33,10 +33,12 @@ public class CacheClient {
     public CacheClient(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
+    // 方法功能：初始化 CacheClient 实例并设置必要依赖或父类参数。
 
     public void set(String key, Object value, Long time, TimeUnit unit) {
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(value), time, unit);
     }
+    // 方法功能：将对象序列化后写入 Redis 并设置过期时间。
 
     public void setWithLogicalExpire(String key, Object value, Long time, TimeUnit unit) {
         // 设置逻辑过期
@@ -46,6 +48,7 @@ public class CacheClient {
         // 写入Redis
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
     }
+    // 方法功能：将对象包装逻辑过期时间后写入 Redis。
 
     public <R,ID> R queryWithPassThrough(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit){
@@ -76,6 +79,7 @@ public class CacheClient {
         this.set(key, r, time, unit);
         return r;
     }
+    // 方法功能：使用缓存空值策略查询数据，防止缓存穿透。
 
     public <R, ID> R queryWithLogicalExpire(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
@@ -121,6 +125,7 @@ public class CacheClient {
         // 6.4.返回过期的商铺信息
         return r;
     }
+    // 方法功能：使用逻辑过期策略查询数据并异步重建缓存。
 
     public <R, ID> R queryWithMutex(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
@@ -170,13 +175,16 @@ public class CacheClient {
         // 8.返回
         return r;
     }
+    // 方法功能：使用互斥锁策略查询数据并重建缓存。
 
     private boolean tryLock(String key) {
         Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 10, TimeUnit.SECONDS);
         return BooleanUtil.isTrue(flag);
     }
+    // 方法功能：尝试获取 Redis 互斥锁。
 
     private void unlock(String key) {
         stringRedisTemplate.delete(key);
     }
+    // 方法功能：释放当前线程持有的 Redis 锁。
 }

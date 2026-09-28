@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
+@org.junit.jupiter.api.Disabled("Legacy test connects to development data. Use isolated org.javaup.seckill tests.")
 @SpringBootTest
 class RedissonTest {
 
@@ -23,6 +24,7 @@ class RedissonTest {
     void setUp() {
         lock = redissonClient.getLock("order");
     }
+    // 方法功能：初始化 Redisson 测试所需的锁对象。
 
     @Test
     void method1() throws InterruptedException {
@@ -41,6 +43,7 @@ class RedissonTest {
             lock.unlock();
         }
     }
+    // 方法功能：获取 Redisson 锁后调用嵌套加锁方法以测试可重入能力。
     void method2() {
         // 尝试获取锁
         boolean isLock = lock.tryLock();
@@ -56,4 +59,5 @@ class RedissonTest {
             lock.unlock();
         }
     }
+    // 方法功能：获取并释放同一 Redisson 锁以验证可重入锁行为。
 }

@@ -1,87 +1,111 @@
 package org.javaup.controller;
 
-
-import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
-import org.javaup.dto.CancelVoucherOrderDto;
-import org.javaup.dto.GetVoucherOrderByVoucherIdDto;
-import org.javaup.dto.GetVoucherOrderDto;
-import org.javaup.dto.Result;
+import jakarta.validation.constraints.*;
+import org.javaup.dto.*;
 import org.javaup.execute.RateLimitHandler;
 import org.javaup.ratelimit.extension.RateLimitScene;
-import org.javaup.service.IReconciliationTaskService;
-import org.javaup.service.ISeckillAccessTokenService;
-import org.javaup.service.IVoucherOrderService;
+import org.javaup.seckill.*;
+import org.javaup.seckill.redis.RedisAdmissionGateway;
 import org.javaup.utils.UserHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-
-/**
- * @program: 黑马点评-plus升级版实战项目。添加 阿星不是程序员 微信，添加时备注 点评 来获取项目的完整资料
- * @description: 优惠券订单api
- * @author: 阿星不是程序员
- **/
 @RestController
 @RequestMapping("/voucher-order")
 public class VoucherOrderController {
+  private final SeckillFacade facade;
+  private final SeckillTransactions tx;
+  private final RedisAdmissionGateway redis;
+  private final SeckillStore store;
+  private final RateLimitHandler limit;
+  private final SeckillRecovery recovery;
 
-    @Resource
-    private IVoucherOrderService voucherOrderService;
+  public VoucherOrderController(
+      SeckillFacade facade,
+      SeckillTransactions tx,
+      RedisAdmissionGateway redis,
+      SeckillStore store,
+      RateLimitHandler limit,
+      SeckillRecovery recovery) {
+    this.facade = facade;
+    this.tx = tx;
+    this.redis = redis;
+    this.store = store;
+    this.limit = limit;
+    this.recovery = recovery;
+  }
 
-    @Resource
-    private ISeckillAccessTokenService accessTokenService;
+  public record Submit(
+      @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{1,64}") String requestId,
+      @NotBlank String accessToken) {}
 
-    @Resource
-    private RateLimitHandler rateLimitHandler;
-    
-    @Resource
-    private IReconciliationTaskService reconciliationTaskService;
+  public record Cancel(@NotNull @Positive Long voucherId, @NotNull @Positive Long orderId) {}
 
-    @GetMapping("/seckill/token/{id}")
-    public Result<String> issueSeckillAccessToken(@PathVariable("id") Long voucherId) {
-        Long userId = UserHolder.getUser().getId();
-        rateLimitHandler.execute(voucherId, userId, RateLimitScene.ISSUE_TOKEN);
-        String token = accessTokenService.issueAccessToken(voucherId, userId);
-        return Result.ok(token);
-    }
+  long user() {
+    return UserHolder.getUser().getId();
+  }
 
-    @PostMapping("/seckill/{id}")
-    public Result<Long> seckillVoucher(@PathVariable("id") Long voucherId,
-                                       @RequestParam(name = "accessToken", required = false) String accessToken) {
-        Long userId = UserHolder.getUser().getId();
-        rateLimitHandler.execute(voucherId, userId, RateLimitScene.SECKILL_ORDER);
-        if (accessTokenService.isEnabled()) {
-            if (accessToken == null || !accessTokenService.validateAndConsume(voucherId, userId, accessToken)) {
-                return Result.fail("令牌校验失败或令牌已失效");
-            }
-        }
-        return voucherOrderService.seckillVoucher(voucherId);
+  @GetMapping("/seckill/token/{id}")
+  public Result<String> token(@PathVariable Long id) {
+    limit.execute(id, user(), RateLimitScene.ISSUE_TOKEN);
+    try {
+      return Result.ok(redis.issueToken(id, user()));
+    } catch (RuntimeException e) {
+      throw SeckillFacade.redisFailure(e);
     }
-    
-    @PostMapping("/get/seckill/voucher/order-id")
-    public Result<Long> getSeckillVoucherOrder(@Valid @RequestBody GetVoucherOrderDto getVoucherOrderDto) {
-        return Result.ok(voucherOrderService.getSeckillVoucherOrder(getVoucherOrderDto));
+  }
+
+  @PostMapping("/seckill/{id}")
+  public Result<SeckillResult> submit(@PathVariable Long id, @Valid @RequestBody Submit body) {
+    limit.execute(id, user(), RateLimitScene.SECKILL_ORDER);
+    return Result.ok(facade.submit(id, user(), body.requestId(), body.accessToken(), false));
+  }
+
+  @GetMapping("/seckill/result")
+  public Result<SeckillResult> result(
+      @RequestParam Long voucherId, @RequestParam String requestId) {
+    limit.execute(voucherId, user(), RateLimitScene.RESULT_QUERY);
+    return Result.ok(facade.result(voucherId, user(), requestId));
+  }
+
+  @PostMapping("/cancel")
+  public Result<SeckillResult> cancel(@Valid @RequestBody Cancel body) {
+    return Result.ok(tx.cancel(body.voucherId(), user(), body.orderId()));
+  }
+
+  @PostMapping("/get/seckill/voucher/order-id/by/voucher-id")
+  public Result<String> owned(@Valid @RequestBody GetVoucherOrderByVoucherIdDto body) {
+    limit.execute(body.getVoucherId(), user(), RateLimitScene.RESULT_QUERY);
+    var row =
+        store.one(
+            "SELECT id FROM tb_voucher_order WHERE voucher_id=? AND user_id=? AND status=1",
+            body.getVoucherId(),
+            user());
+    return Result.ok(row == null ? null : SeckillStore.str(row, "id"));
+  }
+
+  @GetMapping("/notifications")
+  public Result<java.util.List<java.util.Map<String, Object>>> notifications(
+      @RequestParam Long voucherId, @RequestParam(defaultValue = "") String after) {
+    limit.execute(voucherId, user(), RateLimitScene.RESULT_QUERY);
+    return Result.ok(
+        store.jdbc.queryForList(
+            "SELECT event_id,payload,create_time FROM tb_seckill_notification WHERE voucher_id=?"
+                + " AND user_id=? AND event_id>? ORDER BY event_id LIMIT 100",
+            voucherId,
+            user(),
+            after));
+  }
+
+  @PostMapping("/reconciliation/task/all")
+  public Result<Void> audit() {
+    long after = 0;
+    while (true) {
+      var page = store.vouchers(after, 100);
+      if (page.isEmpty()) break;
+      for (long v : page) recovery.audit(v);
+      after = page.get(page.size() - 1);
     }
-    
-    @PostMapping("/get/seckill/voucher/order-id/by/voucher-id")
-    public Result<Long> getSeckillVoucherOrderIdByVoucherId(@Valid @RequestBody GetVoucherOrderByVoucherIdDto getVoucherOrderByVoucherIdDto) {
-        return Result.ok(voucherOrderService.getSeckillVoucherOrderIdByVoucherId(getVoucherOrderByVoucherIdDto));
-    }
-    
-    @PostMapping("/cancel")
-    public Result<Boolean> cancel(@Valid @RequestBody CancelVoucherOrderDto cancelVoucherOrderDto) {
-        return Result.ok(voucherOrderService.cancel(cancelVoucherOrderDto));
-    }
-    
-    @PostMapping(value = "/reconciliation/task/all")
-    public Result<Void> reconciliationTaskAll() {
-        reconciliationTaskService.reconciliationTaskExecute();
-        return Result.ok();
-    }
+    return Result.ok();
+  }
 }

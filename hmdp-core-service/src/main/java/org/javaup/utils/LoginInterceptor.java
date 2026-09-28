@@ -17,10 +17,13 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (UserHolder.getUser() == null) {
             // 没有，需要拦截，设置状态码
             response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"code\":\"UNAUTHENTICATED\",\"errorMsg\":\"请先登录\"}");
             // 拦截
             return false;
         }
         // 有用户，则放行
         return true;
     }
+    // 方法功能：在请求进入控制器前执行登录或 token 刷新校验。
 }

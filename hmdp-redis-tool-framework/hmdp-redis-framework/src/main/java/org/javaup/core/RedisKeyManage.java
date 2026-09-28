@@ -28,10 +28,6 @@ public enum RedisKeyManage {
     SECKILL_VOUCHER_NULL_TAG_KEY("seckill:voucher_null:{%s}","秒杀券id（同槽位HashTag）","value为这是空值","k"),
     
     SECKILL_TRACE_LOG_TAG_KEY("seckill:trace:log:{%s}","秒杀券id（同槽位HashTag）","value为操作记录日志","k"),
-
-    SECKILL_ORDER_STATE_TAG_KEY("seckill:order:state:{%s}","秒杀券id（同槽位HashTag）","HASH，field为orderId，value为RESERVED/COMMITTED/ROLLED_BACK/CANCELLED","k"),
-
-    SECKILL_ORDER_OUTBOX_TAG_KEY("seckill:order:outbox:{%s}","秒杀券id（同槽位HashTag）","Redis Stream，原子保存待投递的秒杀订单","k"),
     
     SECKILL_LIMIT_IP_TAG_KEY("seckill:limit:ip:{%s}:%s","秒杀券id（同槽位HashTag）","value为按IP的限流计数","k"),
     
@@ -70,8 +66,6 @@ public enum RedisKeyManage {
     SECKILL_SUBSCRIBE_STATUS_TAG_KEY("seckill:subscribe:status:{%s}","秒杀券id（同槽位HashTag）","value为用户订阅状态HASH，field为用户id，value为状态码","k"),
     
     SECKILL_SHOP_TOP_BUYERS_DAILY_TAG_KEY("seckill:shop:topbuyers:daily:{%s}:%s","商铺id（同槽位HashTag）与日期(yyyyMMdd)","ZSET，member为用户id，score为购买次数","k"),
-
-    SECKILL_SHOP_TOP_BUYERS_ORDER_DEDUP_TAG_KEY("seckill:shop:topbuyers:dedup:{%s}:%s","商铺id（同槽位HashTag）与日期(yyyyMMdd)","HASH，field为orderId","k"),
     
     SECKILL_SHOP_TOP_BUYERS_UNION_TAG_KEY("seckill:shop:topbuyers:union:{%s}:%s","商铺id（同槽位HashTag）与聚合范围","临时ZSET，member为用户id，score为购买次数合并","k"),
     

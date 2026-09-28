@@ -1,3 +1,14 @@
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
 USE hmdp_1;
 
 DROP TABLE IF EXISTS `tb_blog`;
@@ -532,15 +543,13 @@ CREATE TABLE `tb_voucher_order_0` (
                                       `voucher_id` bigint unsigned NOT NULL COMMENT '购买的代金券id',
                                       `pay_type` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '支付方式 1：余额支付；2：支付宝；3：微信',
                                       `status` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '订单状态，1：正常；2：已取消；',
-                                      `active_voucher_id` bigint unsigned GENERATED ALWAYS AS (CASE WHEN `status` = 1 THEN `voucher_id` ELSE NULL END) STORED COMMENT '仅正常订单参与唯一约束',
                                       `reconciliation_status` tinyint NOT NULL DEFAULT '1' COMMENT '对账状态：1待处理；2异常；3不一致；4一致',
                                       `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
                                       `pay_time` timestamp NULL DEFAULT NULL COMMENT '支付时间',
                                       `use_time` timestamp NULL DEFAULT NULL COMMENT '核销时间',
                                       `refund_time` timestamp NULL DEFAULT NULL COMMENT '退款时间',
                                       `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-                                      PRIMARY KEY (`id`) USING BTREE,
-                                      UNIQUE KEY `uk_voucher_order_user_active_voucher` (`user_id`,`active_voucher_id`)
+                                      PRIMARY KEY (`id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=COMPACT;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -566,15 +575,13 @@ CREATE TABLE `tb_voucher_order_1` (
                                       `voucher_id` bigint unsigned NOT NULL COMMENT '购买的代金券id',
                                       `pay_type` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '支付方式 1：余额支付；2：支付宝；3：微信',
                                       `status` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '订单状态，1：正常；2：已取消；',
-                                      `active_voucher_id` bigint unsigned GENERATED ALWAYS AS (CASE WHEN `status` = 1 THEN `voucher_id` ELSE NULL END) STORED COMMENT '仅正常订单参与唯一约束',
                                       `reconciliation_status` tinyint NOT NULL DEFAULT '1' COMMENT '对账状态：1待处理；2异常；3不一致；4一致',
                                       `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
                                       `pay_time` timestamp NULL DEFAULT NULL COMMENT '支付时间',
                                       `use_time` timestamp NULL DEFAULT NULL COMMENT '核销时间',
                                       `refund_time` timestamp NULL DEFAULT NULL COMMENT '退款时间',
                                       `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-                                      PRIMARY KEY (`id`) USING BTREE,
-                                      UNIQUE KEY `uk_voucher_order_user_active_voucher` (`user_id`,`active_voucher_id`)
+                                      PRIMARY KEY (`id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=COMPACT;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

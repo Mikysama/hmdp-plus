@@ -1,0 +1,21 @@
+# Intentionally has no development endpoints. Full-context tests must explicitly supply isolated services.
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:seckill_isolated;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ''
+  data:
+    redis:
+      host: 127.0.0.1
+      port: ${SECKILL_TEST_REDIS_PORT:1}
+  kafka:
+    bootstrap-servers: ${SECKILL_TEST_KAFKA_SERVERS:127.0.0.1:1}
+    listener:
+      auto-startup: false
+seckill:
+  legacy:
+    enabled: false
+  v2:
+    prefix: hmdp:test:v2
+    workers-enabled: false

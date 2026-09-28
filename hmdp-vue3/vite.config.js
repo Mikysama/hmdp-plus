@@ -9,9 +9,6 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
-  test: {
-    environment: 'jsdom'
-  },
   plugins: [
     vue(),
     // vueDevTools(),
@@ -53,9 +50,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8085',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true
       }
     }
   }

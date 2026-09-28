@@ -61,6 +61,7 @@ public class JacksonCustom implements Jackson2ObjectMapperBuilderCustomizer, Ord
                 String newValue = sdf.format(value);
                 gen.writeString(newValue);
             }
+            // 方法功能：将 Date 按统一日期时间格式序列化为 JSON 字符串。
 
         });
         simpleModules[2] = new SimpleModule().addDeserializer(Date.class, new DateJsonDeserializer());
@@ -83,9 +84,11 @@ public class JacksonCustom implements Jackson2ObjectMapperBuilderCustomizer, Ord
         builder.featuresToEnable(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.mappedFeature());
         builder.featuresToEnable(JsonWriteFeature.WRITE_NUMBERS_AS_STRINGS.mappedFeature());
     }
+    // 方法功能：配置 Jackson 序列化、反序列化和空值处理规则。
 
     @Override
     public int getOrder() {
         return 1;
     }
+    // 方法功能：实现 JacksonCustom.getOrder 的业务逻辑。
 }

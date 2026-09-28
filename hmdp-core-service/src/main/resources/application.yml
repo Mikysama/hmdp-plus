@@ -80,14 +80,42 @@ management:
       export:
         enabled: true
 
-cache:
-  startup-cleanup:
-    # Never purge shared Redis caches during a normal instance startup.
+
+seckill:
+  security:
+    admin-user-ids: ${SECKILL_ADMIN_USER_IDS:}
+  legacy:
     enabled: false
-  ttl:
-    jitter-percent: 20
-    seckill-voucher-base-seconds: 600
-  rebuild:
-    # Per-instance bulkhead for concurrent MySQL cache rebuilds.
-    max-concurrent: 50
-      
+  v2:
+    workers-enabled: true
+    prefix: hmdp:v3
+    # Statistics protocol is unchanged; preserve historical counts and event deduplication.
+    buyer-stats-prefix: hmdp:v2
+    # New flow: Caffeine -> Redis hold + Outbox Stream -> Kafka -> MySQL.
+    consumer-concurrency: 1
+    queue-seconds: 60
+    request-seconds: 60
+    orphan-seconds: 30
+    activity-zone: Asia/Shanghai
+    admission-rate: 100
+    admission-concurrency: 32
+    local-admission-concurrency: 128
+    lease-scan-ms: 1000
+    recovery-scan-ms: 5000
+    expiry-scan-ms: 5000
+    outbox-scan-ms: 500
+    stream-relay-ms: 500
+    audit-scan-ms: 60000
+
+rate-limit:
+  trusted-proxies: []
+  issue:
+    ip-window-millis: 1000
+    ip-max-attempts: 50
+    user-window-millis: 1000
+    user-max-attempts: 5
+  seckill:
+    ip-window-millis: 1000
+    ip-max-attempts: 100
+    user-window-millis: 1000
+    user-max-attempts: 5

@@ -41,6 +41,7 @@ public class SeckillVoucherInvalidationDlqConsumer extends AbstractConsumerHandl
     public SeckillVoucherInvalidationDlqConsumer() {
         super(SeckillVoucherInvalidationMessage.class);
     }
+    // 方法功能：初始化 SeckillVoucherInvalidationDlqConsumer 实例并设置必要依赖或父类参数。
     
     @KafkaListener(
             topics = {SPRING_INJECT_PREFIX_DISTINCTION_NAME + "-" + SECKILL_VOUCHER_CACHE_INVALIDATION_TOPIC + ".DLQ"},
@@ -55,6 +56,7 @@ public class SeckillVoucherInvalidationDlqConsumer extends AbstractConsumerHandl
             acknowledgment.acknowledge();
         }
     }
+    // 方法功能：接收 Kafka 原始消息，委托统一消费流程处理并提交确认。
     
     @Override
     protected void doConsume(MessageExtend<SeckillVoucherInvalidationMessage> message) {
@@ -69,6 +71,7 @@ public class SeckillVoucherInvalidationDlqConsumer extends AbstractConsumerHandl
 
         auditLog.error("SECKILL_INVALIDATION_DLQ | message={}", JSON.toJSONString(message));
     }
+    // 方法功能：执行消息消费的核心业务处理。
     
     private void safeInc(String name, String tagKey, String tagValue) {
         try {
@@ -78,4 +81,5 @@ public class SeckillVoucherInvalidationDlqConsumer extends AbstractConsumerHandl
         } catch (Exception ignore) {
         }
     }
+    // 方法功能：安全递增监控指标，避免指标异常影响主流程。
 }

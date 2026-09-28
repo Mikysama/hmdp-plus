@@ -13,12 +13,15 @@ public class UserHolder {
     public static void saveUser(UserDTO user){
         TL.set(user);
     }
+    // 方法功能：将当前登录用户保存到线程上下文。
 
     public static UserDTO getUser(){
         return TL.get();
     }
+    // 方法功能：从线程上下文读取当前登录用户。
 
     public static void removeUser(){
         TL.remove();
     }
+    // 方法功能：清理线程上下文中的当前登录用户。
 }

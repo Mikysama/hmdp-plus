@@ -2,6 +2,7 @@ package org.javaup.service;
 
 import org.javaup.entity.BlogComments;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.javaup.dto.Result;
 
 /**
  * @program: 黑马点评-plus升级版实战项目。添加 阿星不是程序员 微信，添加时备注 点评 来获取项目的完整资料
@@ -10,4 +11,11 @@ import com.baomidou.mybatisplus.extension.service.IService;
  **/
 public interface IBlogCommentsService extends IService<BlogComments> {
 
+    Result saveComment(BlogComments comment);
+
+    Result queryCommentsByBlogId(Long blogId, Integer current);
+
+    Result queryRepliesByParentId(Long parentId, Integer current);
+
+    Result removeComment(Long id);
 }

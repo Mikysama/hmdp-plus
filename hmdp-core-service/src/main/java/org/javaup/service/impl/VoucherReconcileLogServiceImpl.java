@@ -49,6 +49,7 @@ public class VoucherReconcileLogServiceImpl extends ServiceImpl<VoucherReconcile
         }
         return saveReconcileLog(voucherReconcileLogDto);
     }
+    // 方法功能：保存秒杀订单业务对账日志。
     
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -72,6 +73,7 @@ public class VoucherReconcileLogServiceImpl extends ServiceImpl<VoucherReconcile
         }
         return saveReconcileLog(voucherReconcileLogDto);
     }
+    // 方法功能：保存秒杀订单业务对账日志。
     
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -93,4 +95,5 @@ public class VoucherReconcileLogServiceImpl extends ServiceImpl<VoucherReconcile
                 .setAfterQty(voucherReconcileLogDto.getAfterQty());
         return save(logEntity);
     }
+    // 方法功能：保存秒杀订单业务对账日志。
 }

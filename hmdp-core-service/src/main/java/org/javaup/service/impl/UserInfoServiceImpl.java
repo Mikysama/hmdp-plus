@@ -47,6 +47,7 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
         redisCache.set(RedisKeyBuild.createRedisKey(RedisKeyManage.USER_INFO_KEY, userId), userInfo);
         return userInfo;
     }
+    // 方法功能：按用户 ID 查询用户扩展信息，优先读取缓存。
     
     @Override
     @ServiceLock(lockType= LockType.Write,name = UPDATE_USER_INFO_LOCK,keys = {"#userId"})
@@ -93,5 +94,6 @@ public class UserInfoServiceImpl extends ServiceImpl<UserInfoMapper, UserInfo> i
         }
         return Result.ok();
     }
+    // 方法功能：更新用户会员等级并同步维护 Redis 等级集合。
 
 }

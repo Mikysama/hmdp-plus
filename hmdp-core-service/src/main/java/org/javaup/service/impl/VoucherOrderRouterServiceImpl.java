@@ -31,4 +31,5 @@ public class VoucherOrderRouterServiceImpl extends ServiceImpl<VoucherOrderRoute
         }
         return null;
     }
+    // 方法功能：按请求参数查询并返回对应业务数据。
 }

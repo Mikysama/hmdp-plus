@@ -18,6 +18,7 @@ public class HmdpCommonAutoConfig {
     public Jackson2ObjectMapperBuilderCustomizer jacksonCustom(){
         return new JacksonCustom();
     }
+    // 方法功能：注册全局 Jackson 自定义配置器。
     
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
@@ -25,4 +26,5 @@ public class HmdpCommonAutoConfig {
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         return interceptor;
     }
+    // 方法功能：创建 MyBatis Plus 分页拦截器并配置 MySQL 方言。
 }

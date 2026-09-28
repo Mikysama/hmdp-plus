@@ -7,19 +7,20 @@ export const useUserStore = defineStore(
   () => {
     const token = ref('') // 定义 token
     const setToken = (t) => {
+      console.log('设置token:', t)
       token.value = t
+      console.log('当前token:', token.value)
     } // 设置 token
-    const getToken = () => token.value
+    const getToken = () => {
+      console.log('获取token:', token.value)
+      return token.value
+    }
 
     // 创建个人信息的ref
     const userInfo = ref({})
     const getUserInfo = () => userInfo.value
     const setUserInfo = (obj) => (userInfo.value = obj)
     const resetUserInfo = () => {
-      userInfo.value = {}
-    }
-    const resetSession = () => {
-      token.value = ''
       userInfo.value = {}
     }
 
@@ -30,8 +31,7 @@ export const useUserStore = defineStore(
       userInfo,
       getUserInfo,
       setUserInfo,
-      resetUserInfo,
-      resetSession
+      resetUserInfo
     }
   },
   {

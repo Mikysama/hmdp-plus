@@ -1,6 +1,7 @@
 package org.javaup.mapper;
 
 import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.javaup.entity.VoucherOrder;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -10,6 +11,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * @description: 优惠券订单 Mapper
  * @author: 阿星不是程序员
  **/
+@Mapper
 public interface VoucherOrderMapper extends BaseMapper<VoucherOrder> {
     
     /**

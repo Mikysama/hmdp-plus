@@ -36,9 +36,11 @@ public class SeckillVoucherOperate {
             log.error("redisScript init lua error",e);
         }
     }
+    // 方法功能：初始化当前组件需要的脚本、缓存、线程或启动数据。
     
     public SeckillVoucherDomain execute(List<String> keys, String[] args){
         Object object = redisCache.getInstance().execute(redisScript, keys, args);
         return JSON.parseObject((String)object, SeckillVoucherDomain.class);
     }
+    // 方法功能：执行当前消费者、脚本或延迟任务的核心处理逻辑。
 }

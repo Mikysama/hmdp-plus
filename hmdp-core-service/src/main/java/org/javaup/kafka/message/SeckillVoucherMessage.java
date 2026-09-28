@@ -23,11 +23,11 @@ public class SeckillVoucherMessage {
 
     private Long traceId;
 
-    private Integer beforeQty;
+    private Integer beforeQty; // 扣减前库存
     
-    private Integer changeQty;
+    private Integer changeQty; // 扣减数量
     
-    private Integer afterQty;
+    private Integer afterQty; // 扣减后库存
     
-    private Boolean autoIssue;
+    private Boolean autoIssue; // 是否自动发放
 }

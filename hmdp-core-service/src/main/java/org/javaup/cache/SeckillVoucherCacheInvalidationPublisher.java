@@ -32,14 +32,15 @@ public class SeckillVoucherCacheInvalidationPublisher {
         RedisKeyBuild seckillVoucherRedisKey =
                 RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_TAG_KEY, voucherId);
         seckillVoucherLocalCache.invalidate(seckillVoucherRedisKey.getRelKey());
-        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_TAG_KEY, voucherId));
-        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId));
-        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_NULL_TAG_KEY, voucherId));
+        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_TAG_KEY, voucherId)); // 秒杀信息缓存删除
+        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_STOCK_TAG_KEY, voucherId));  // 秒杀库存缓存删除
+        redisCache.del(RedisKeyBuild.createRedisKey(RedisKeyManage.SECKILL_VOUCHER_NULL_TAG_KEY, voucherId)); // 秒杀信息空缓存删除
         
         SeckillVoucherInvalidationMessage payload = new SeckillVoucherInvalidationMessage(voucherId, reason);
         invalidationProducer.sendPayload(
                 SpringUtil.getPrefixDistinctionName() + "-" + SECKILL_VOUCHER_CACHE_INVALIDATION_TOPIC,
                 payload
-        );
+        );// 发送消息到Kafka，通知其他服务实例进行缓存失效
     }
+    // 方法功能：删除指定秒杀券的本地和 Redis 缓存，并发送缓存失效广播消息。
 }

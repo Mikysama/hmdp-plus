@@ -29,6 +29,10 @@ public class UpdateSeckillVoucherDto implements Serializable {
     @NotNull
     private Long voucherId;
 
+    @NotNull
+    @jakarta.validation.constraints.Min(0)
+    private Long expectedVersion;
+
     /**
      * 代金券标题
      */

@@ -3,14 +3,11 @@ import axios from 'axios'
 import JSONbig from 'json-bigint'
 import { useUserStore } from '@/stores'
 import router from '@/router'
-import {
-  clearUnauthorizedSession,
-  getBusinessErrorMessage,
-  getRequestErrorMessage
-} from './requestHelpers'
+import { ElMessage } from 'element-plus'
+import { normalizeRequestError } from './requestError'
 const baseURL = '/api'
-
 const instance = axios.create({
+  // TODO 1.设置基础地址和超时时间
   baseURL,
   timeout: 10000,
   // 使用 json-bigint 将超过安全整数范围的数以字符串存储，避免精度丢失
@@ -31,6 +28,7 @@ const instance = axios.create({
 instance.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
+    // TODO 2.请求头里添加token
     if (userStore.token) {
       config.headers.Authorization = `${userStore.token}`
     }
@@ -41,28 +39,15 @@ instance.interceptors.request.use(
 //响应拦截器
 instance.interceptors.response.use(
   (response) => {
-    const data = response.data
-    const message = getBusinessErrorMessage(data)
-    if (message) {
-      ElMessage.error(message)
-      return Promise.reject(new Error(message))
-    }
-    return data
+    return response.data
   },
   (error) => {
-    if (error.response?.status === 401) {
-      const userStore = useUserStore()
-      clearUnauthorizedSession(
-        userStore,
-        router.currentRoute.value.path,
-        (path) => router.push(path)
-      )
-      ElMessage.error('请先登录')
-      return Promise.reject(error)
+    const normalized = normalizeRequestError(error)
+    if (normalized.status === 401) {
+      router.push('/login')
     }
-    const message = getRequestErrorMessage(error)
-    ElMessage.error(message)
-    return Promise.reject(error)
+    if (!error.config?.silentError) ElMessage.error(normalized.message)
+    return Promise.reject(normalized)
   }
 )
 export default instance

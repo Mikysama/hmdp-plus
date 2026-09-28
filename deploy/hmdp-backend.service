@@ -1,0 +1,17 @@
+[Unit]
+Description=HMDP Plus backend
+After=network.target mysql.service redis-server.service hmdp-kafka.service
+Requires=mysql.service redis-server.service hmdp-kafka.service
+
+[Service]
+Type=simple
+Environment=SERVER_ADDRESS=127.0.0.1
+Environment='SPRING_APPLICATION_JSON={"rate-limit":{"trusted-proxies":["127.0.0.1"]}}'
+WorkingDirectory=/home/lymzhao/workspace/hmdp-plus-master
+ExecStart=/usr/bin/java -jar /home/lymzhao/workspace/hmdp-plus-master/hmdp-core-service/target/hmdp-core-service-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

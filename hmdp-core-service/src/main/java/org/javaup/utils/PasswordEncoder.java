@@ -1,7 +1,10 @@
 package org.javaup.utils;
 
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import cn.hutool.core.util.RandomUtil;
+import org.springframework.util.DigestUtils;
+
+import java.nio.charset.StandardCharsets;
 /**
  * @program: 黑马点评-plus升级版实战项目。添加 阿星不是程序员 微信，添加时备注 点评 来获取项目的完整资料
  * @description: 密码
@@ -9,16 +12,30 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
  **/
 public class PasswordEncoder {
 
-    private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder();
-
     public static String encode(String password) {
-        return ENCODER.encode(password);
+        // 生成盐
+        String salt = RandomUtil.randomString(20);
+        // 加密
+        return encode(password,salt);
     }
-
+    // 方法功能：对密码进行加盐 MD5 哈希编码。
+    private static String encode(String password, String salt) {
+        // 加密
+        return salt + "@" + DigestUtils.md5DigestAsHex((password + salt).getBytes(StandardCharsets.UTF_8));
+    }
+    // 方法功能：对密码进行加盐 MD5 哈希编码。
     public static Boolean matches(String encodedPassword, String rawPassword) {
-        if (encodedPassword == null || encodedPassword.isBlank() || rawPassword == null) {
+        if (encodedPassword == null || rawPassword == null) {
             return false;
         }
-        return ENCODER.matches(rawPassword, encodedPassword);
+        if(!encodedPassword.contains("@")){
+            throw new RuntimeException("密码格式不正确！");
+        }
+        String[] arr = encodedPassword.split("@");
+        // 获取盐
+        String salt = arr[0];
+        // 比较
+        return encodedPassword.equals(encode(rawPassword, salt));
     }
+    // 方法功能：校验明文密码与已编码密码是否匹配。
 }

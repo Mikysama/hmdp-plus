@@ -107,24 +107,6 @@ public abstract class AbstractProducerHandler<M extends MessageExtend<?>> {
     public final <T> SendResult<String, M> sendAndWait(String topic, T payload) throws ExecutionException, InterruptedException {
         return sendPayload(topic, payload).get();
     }
-
-    public final <T> SendResult<String, M> sendAndWait(String topic, String key, T payload,
-                                                       Map<String, String> headers) {
-        try {
-            return sendPayload(topic, key, payload, headers).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while sending Kafka message", e);
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("Kafka message send failed", e.getCause());
-        }
-    }
-
-    public final CompletableFuture<SendResult<String, M>> sendMessageToDlq(
-            String originalTopic, M message, String reason) {
-        message.setHeaders(Map.of("dlqReason", reason == null ? "unknown" : reason));
-        return sendRecord(originalTopic + ".DLQ", message);
-    }
     
     @SuppressWarnings("unchecked")
     public final <T> CompletableFuture<SendResult<String, M>> sendToDlq(String originalTopic, T payload, String reason) {

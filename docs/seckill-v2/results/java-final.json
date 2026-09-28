@@ -1,0 +1,100 @@
+{
+  "date": "2026-09-24",
+  "suite": [
+    {
+      "name": "org.javaup.seckill.InventoryTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillCatalogServiceTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.873"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillEndToEndIT",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "1",
+      "time": "25.748"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillFacadeTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.209"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillKafkaTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "23.926"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillOutboxTest",
+      "tests": "25",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.209"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillRecoveryTest",
+      "tests": "25",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.384"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillSecurityTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.029"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillShardingIT",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "12.064"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillTransactionsTest",
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.313"
+    },
+    {
+      "name": "org.javaup.seckill.SeckillWiringTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "2.437"
+    }
+  ],
+  "totals": {
+    "tests": 101,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "note": "Some fixture subclasses inherit transaction tests; totals are test executions, not unique scenarios. Optional load skipped here; separately executed with CSV artifacts."
+}

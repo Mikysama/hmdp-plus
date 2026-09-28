@@ -22,6 +22,7 @@ public class SimpleRedisLock implements ILock {
         this.name = name;
         this.stringRedisTemplate = stringRedisTemplate;
     }
+    // 方法功能：初始化 SimpleRedisLock 实例并设置必要依赖或父类参数。
 
     private static final String KEY_PREFIX = "lock:";
     private static final String ID_PREFIX = UUID.randomUUID().toString(true) + "-";
@@ -41,6 +42,7 @@ public class SimpleRedisLock implements ILock {
                 .setIfAbsent(KEY_PREFIX + name, threadId, timeoutSec, TimeUnit.SECONDS);
         return Boolean.TRUE.equals(success);
     }
+    // 方法功能：尝试获取 Redis 互斥锁。
 
     @Override
     public void unlock() {
@@ -50,6 +52,7 @@ public class SimpleRedisLock implements ILock {
                 Collections.singletonList(KEY_PREFIX + name),
                 ID_PREFIX + Thread.currentThread().getId());
     }
+    // 方法功能：释放当前线程持有的 Redis 锁。
     /*@Override
     public void unlock() {
         // 获取线程标示

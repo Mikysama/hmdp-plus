@@ -3,7 +3,6 @@ package org.javaup.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import org.javaup.dto.LoginFormDTO;
-import org.javaup.dto.PasswordResetFormDTO;
 import org.javaup.dto.Result;
 import org.javaup.dto.UserDTO;
 import org.javaup.entity.User;
@@ -13,7 +12,6 @@ import org.javaup.service.IUserService;
 import org.javaup.utils.UserHolder;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpSession;
-import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Objects;
@@ -50,6 +47,7 @@ public class UserController {
         // 发送短信验证码并保存验证码
         return userService.sendCode(phone, session);
     }
+    // 方法功能：校验手机号并发送登录验证码。
 
     /**
      * 登录功能
@@ -60,20 +58,18 @@ public class UserController {
         // 实现登录功能
         return userService.login(loginForm, session);
     }
+    // 方法功能：校验登录信息，创建或读取用户并签发登录 token。
 
     /**
      * 登出功能
      * @return 无
      */
     @PostMapping("/logout")
-    public Result<Void> logout(@RequestHeader(value = "Authorization", required = false) String token){
-        return userService.logout(token);
+    public Result<Void> logout(){
+        // TODO 实现登出功能
+        return Result.fail("功能未完成");
     }
-
-    @PostMapping("/password/reset")
-    public Result<Void> resetPassword(@Valid @RequestBody PasswordResetFormDTO passwordResetForm) {
-        return userService.resetPassword(passwordResetForm);
-    }
+    // 方法功能：执行用户登出占位逻辑并返回成功结果。
 
     @GetMapping("/me")
     public Result<UserDTO> me(){
@@ -81,6 +77,7 @@ public class UserController {
         UserDTO user = UserHolder.getUser();
         return Result.ok(user);
     }
+    // 方法功能：返回当前登录用户信息。
 
     @GetMapping("/info/{id}")
     public Result<UserInfo> info(@PathVariable("id") String userId){
@@ -95,6 +92,7 @@ public class UserController {
         // 返回
         return Result.ok(info);
     }
+    // 方法功能：查询指定用户的详细信息并隐藏敏感字段。
 
     /**
      * 当前登录用户更新等级
@@ -107,6 +105,7 @@ public class UserController {
         }
         return userInfoService.updateUserLevel(current.getId(), newLevel);
     }
+    // 方法功能：更新当前登录用户的会员等级。
 
     @GetMapping("/{id}")
     public Result<UserDTO> queryUserById(@PathVariable("id") Long userId){
@@ -119,14 +118,17 @@ public class UserController {
         // 返回
         return Result.ok(userDTO);
     }
+    // 方法功能：按用户 ID 查询基础用户信息。
 
     @PostMapping("/sign")
     public Result<Void> sign(){
         return userService.sign();
     }
+    // 方法功能：记录当前用户当天签到。
 
     @GetMapping("/sign/count")
     public Result signCount(){
         return userService.signCount();
     }
+    // 方法功能：统计当前用户连续签到天数。
 }

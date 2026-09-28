@@ -8,9 +8,6 @@ export const userGetCode = (phone) =>
   request.post('/user/code', null, { params: { phone } })
 // 用户：登录
 export const userLogin = (data) => request.post('/user/login', data)
-export const userResetPassword = (data) =>
-  request.post('/user/password/reset', data)
-export const userLogout = () => request.post('/user/logout')
 
 // 首页：获取首页矩阵图数据
 export const indexQueryTypes = () => request.get('/shop-type/list')

@@ -94,13 +94,19 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
     
     @Override
     public Long addVoucher(VoucherDto voucherDto) {
+        Voucher one = lambdaQuery().orderByDesc(Voucher::getId).one();
+        long newId = 1L;
+        if (one != null) {
+            newId = one.getId() + 1;
+        }
         Voucher voucher = new Voucher();
         BeanUtil.copyProperties(voucherDto, voucher);
-        voucher.setId(snowflakeIdGenerator.nextId());
+        voucher.setId(newId);
         save(voucher);
         bloomFilterHandlerFactory.get(BLOOM_FILTER_HANDLER_VOUCHER).add(voucher.getId().toString());
         return voucher.getId();
     }
+    // 方法功能：新增普通优惠券并返回券 ID。
     
     @Override
     public Result<List<Voucher>> queryVoucherOfShop(Long shopId) {
@@ -109,6 +115,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         // 返回结果
         return Result.ok(vouchers);
     }
+    // 方法功能：查询指定商铺可用优惠券列表。
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -116,6 +123,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         //return doAddSeckillVoucherV1(seckillVoucherDto);
         return doAddSeckillVoucherV2(seckillVoucherDto);
     }
+    // 方法功能：新增秒杀券并返回秒杀券 ID。
     
     @Override
     @ServiceLock(lockType= LockType.Write,name = UPDATE_SECKILL_VOUCHER_LOCK,keys = {"#updateSeckillVoucherDto.voucherId"})
@@ -183,6 +191,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
             seckillVoucherCacheInvalidationPublisher.publishInvalidate(voucherId, "update");
         }
     }
+    // 方法功能：更新秒杀券基础信息、规则和相关缓存。
     
     @Override
     @ServiceLock(lockType= LockType.Write,name = UPDATE_SECKILL_VOUCHER_STOCK_LOCK,keys = {"#updateSeckillVoucherDto.voucherId"})
@@ -242,6 +251,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
                     .autoIssueVoucherToEarliestSubscriber(seckillVoucher.getVoucherId(),null));
         }
     }
+    // 方法功能：更新秒杀券库存并同步数据库、Redis 和本地缓存。
     
     @Override
     public void subscribe(final VoucherSubscribeDto voucherSubscribeDto) {
@@ -302,6 +312,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         }
         redisCache.expire(statusKey, ttlSeconds, TimeUnit.SECONDS);
     }
+    // 方法功能：订阅指定秒杀券并记录用户订阅关系。
     
     @Override
     public void unsubscribe(final VoucherSubscribeDto voucherSubscribeDto) {
@@ -336,6 +347,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
                 ttlSeconds, TimeUnit.SECONDS);
         redisCache.expire(statusKey, ttlSeconds, TimeUnit.SECONDS);
     }
+    // 方法功能：取消指定秒杀券订阅并移除用户订阅关系。
     
     @Override
     public Integer getSubscribeStatus(final VoucherSubscribeDto voucherSubscribeDto) {
@@ -372,6 +384,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         ));
         return inQueue ? SubscribeStatus.SUBSCRIBED.getCode() : SubscribeStatus.UNSUBSCRIBED.getCode();
     }
+    // 方法功能：查询用户对指定秒杀券的订阅状态。
     
     @Override
     public List<GetSubscribeStatusVo> getSubscribeStatusBatch(final VoucherSubscribeBatchDto voucherSubscribeBatchDto) {
@@ -411,6 +424,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         }
         return res;
     }
+    // 方法功能：批量查询用户对多个秒杀券的订阅状态。
     
     public Long doAddSeckillVoucherV1(SeckillVoucherDto seckillVoucherDto) {
         VoucherDto voucherDto = new VoucherDto();
@@ -437,6 +451,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         );
         return voucherId;
     }
+    // 方法功能：使用本地锁方式新增秒杀券并加载库存。
     
     public Long doAddSeckillVoucherV2(SeckillVoucherDto seckillVoucherDto) {
         VoucherDto voucherDto = new VoucherDto();
@@ -472,6 +487,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         sendDelayedVoucherReminder(seckillVoucher);
         return voucherId;
     }
+    // 方法功能：使用分布式锁方式新增秒杀券并加载库存。
     
     public void sendDelayedVoucherReminder(SeckillVoucher seckillVoucher){
         LocalDateTime beginTime = seckillVoucher.getBeginTime();
@@ -500,6 +516,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         delayQueueContext.sendMessage(topic, content, delaySeconds, TimeUnit.SECONDS);
         log.info("[DELAY_REMINDER] 已调度提醒消息 voucherId={} delaySeconds={} topic={}", seckillVoucher.getVoucherId(), delaySeconds, topic);
     }
+    // 方法功能：根据秒杀券开抢时间发送延迟提醒消息。
     
     @Override
     public void delayVoucherReminder(DelayVoucherReminderDto delayVoucherReminderDto) {
@@ -518,4 +535,5 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         delayQueueContext.sendMessage(topic, content, delayVoucherReminderDto.getDelaySeconds(), TimeUnit.SECONDS);
         log.info("[测试延迟发送] 已调度提醒消息 voucherId={} delaySeconds={} topic={}", seckillVoucher.getVoucherId(), delaySeconds, topic);
     }
+    // 方法功能：校验并提交指定秒杀券的延迟提醒任务。
 }

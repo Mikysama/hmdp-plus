@@ -55,12 +55,13 @@ public class DateJsonDeserializer extends JsonDeserializer<Date> {
 			}  else if (str.matches("^\\d{4}/\\d{1,2}/\\d{1,2} {1}\\d{1,2}:\\d{1,2}:\\d{1,2}$")) {
 				return DateUtils.parse(str, FORMAT.get(4));
 			}else {
-				throw new IllegalArgumentException("Invalid boolean value '" + str + "'");
+				throw new IllegalArgumentException("Invalid date value '" + str + "'");
 			}
 		}
 		
 		return convertDate;
 	}
+	// 方法功能：将 JSON 中的日期文本按时间戳或预设格式反序列化为 Date。
 	
 	
 	/**
@@ -73,4 +74,5 @@ public class DateJsonDeserializer extends JsonDeserializer<Date> {
 		Matcher m = P.matcher(number);
 		return m.matches();
 	}
+	// 方法功能：判断字符串是否为纯数字格式。
 }

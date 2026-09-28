@@ -28,6 +28,8 @@ public class SeckillRateLimitConfigProperties implements Serializable {
     
     private Integer userMaxAttempts = 5;
     
+    private Set<String> trustedProxies = Collections.emptySet();
+
     private Set<String> ipWhitelist = Collections.emptySet();
     
     private Set<Long> userWhitelist = Collections.emptySet();

@@ -14,10 +14,11 @@ import org.javaup.enums.BaseCode;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Result<T> {
-    private Boolean success; //是否成功
-    private String errorMsg; //错误信息
-    private T data; //数据
-    private Long total; //分页查询时的数据总数
+    private String code;
+    private Boolean success;
+    private String errorMsg;
+    private T data;
+    private Long total;
 
     public static <T> Result<T> ok(){
         Result<T> result = new Result<T>();

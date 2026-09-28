@@ -38,6 +38,7 @@ public class ShopController {
     public Result queryShopById(@PathVariable("id") Long id) {
         return shopService.queryById(id);
     }
+    // 方法功能：查询 shop by id 相关数据并返回结果。
 
     /**
      * 新增商铺信息
@@ -48,6 +49,7 @@ public class ShopController {
     public Result saveShop(@RequestBody Shop shop) {
         return shopService.saveShop(shop);
     }
+    // 方法功能：保存商铺并写入布隆过滤器。
 
     /**
      * 更新商铺信息
@@ -59,6 +61,7 @@ public class ShopController {
         // 写入数据库
         return shopService.update(shop);
     }
+    // 方法功能：更新 shop 相关业务数据。
 
     /**
      * 根据商铺类型分页查询商铺信息
@@ -75,6 +78,7 @@ public class ShopController {
     ) {
        return shopService.queryShopByType(typeId, current, x, y);
     }
+    // 方法功能：按类型分页查询商铺，支持基于地理位置的距离排序。
 
     /**
      * 根据商铺名称关键字分页查询商铺信息
@@ -94,4 +98,5 @@ public class ShopController {
         // 返回数据
         return Result.ok(page.getRecords());
     }
+    // 方法功能：查询 shop by name 相关数据并返回结果。
 }

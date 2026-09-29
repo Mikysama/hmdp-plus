@@ -11,7 +11,7 @@ class SeckillAdmissionCacheTest {
   void repeatedActivityLookupsUseLocalCacheAndNeverNeedDatabase() {
     var redis = mock(RedisAdmissionGateway.class);
     when(redis.activity(1)).thenReturn(new RedisAdmissionGateway.Activity("1", 0, Long.MAX_VALUE));
-    var cache = new SeckillAdmissionCache(redis);
+    var cache = new SeckillAdmissionCache(redis, mock(SeckillVoucherBloom.class));
     cache.check(1, 7, "first");
     cache.check(1, 8, "second");
     verify(redis, times(1)).activity(1);
@@ -22,7 +22,7 @@ class SeckillAdmissionCacheTest {
   void closedActivityRejectsNewIntentButDoesNotBlockExistingRequestRetry() {
     var redis = mock(RedisAdmissionGateway.class);
     when(redis.activity(1)).thenReturn(new RedisAdmissionGateway.Activity("1", 0, 1));
-    var cache = new SeckillAdmissionCache(redis);
+    var cache = new SeckillAdmissionCache(redis, mock(SeckillVoucherBloom.class));
     assertEquals(
         "ENDED", assertThrows(SeckillFailure.class, () -> cache.check(1, 7, "new")).getCode());
     when(redis.findReservation(1, 7, "old"))

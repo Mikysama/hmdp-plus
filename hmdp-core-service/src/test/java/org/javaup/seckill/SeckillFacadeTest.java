@@ -27,6 +27,25 @@ class SeckillFacadeTest {
   }
 
   @Test
+  void bloomRejectedVoucherCannotAllocateAToken() {
+    var f = facade();
+    doThrow(new SeckillFailure("VOUCHER_UNAVAILABLE", 409)).when(cache).checkExists(999);
+    assertEquals("VOUCHER_UNAVAILABLE", assertThrows(SeckillFailure.class,
+        () -> f.issueToken(999, 7)).getCode());
+    verify(redis, never()).issueToken(anyLong(), anyLong());
+    verifyNoInteractions(store, tx, users, publisher);
+  }
+
+  @Test
+  void resultLookupIsNotGatedByBloom() {
+    var f = facade();
+    when(tx.result(1, 7, "request"))
+        .thenReturn(new SeckillResult("request", "101", "SUCCEEDED", null, null));
+    assertEquals("SUCCEEDED", f.result(1, 7, "request").status());
+    verifyNoInteractions(cache);
+  }
+
+  @Test
   void qualifiedRequestMustQueueWithoutAnyDatabaseOrMemberAccess() {
     var f = facade();
     assertEquals("QUEUED", f.submit(1, 7, "request", "token", false).status());

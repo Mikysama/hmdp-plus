@@ -46,7 +46,7 @@ class SeckillWiringTest {
     @EnableKafka
     @Import({SeckillStore.class, SeckillTransactions.class, SeckillFacade.class,
             SeckillCatalogService.class, SeckillRecovery.class, SeckillMetrics.class,
-            SeckillAdmissionCache.class, SeckillAdmissionPublisher.class, SeckillQueuedProcessor.class,
+            SeckillVoucherBloom.class, SeckillAdmissionCache.class, SeckillAdmissionPublisher.class, SeckillQueuedProcessor.class,
             SeckillSecurityInterceptor.class, RedisAdmissionGateway.class,
             SeckillKafkaConfiguration.class, SeckillWorkers.class,
             VoucherOrderController.class, VoucherController.class, MvcConfig.class,
@@ -55,6 +55,7 @@ class SeckillWiringTest {
         @Bean static PropertySourcesPlaceholderConfigurer placeholders() {
             return new PropertySourcesPlaceholderConfigurer();
         }
+        @Bean org.javaup.handler.BloomFilterHandlerFactory bloomFilterHandlerFactory() { return mock(org.javaup.handler.BloomFilterHandlerFactory.class); }
         @Bean JdbcTemplate jdbcTemplate() { return mock(JdbcTemplate.class); }
         @Bean PlatformTransactionManager transactionManager() {
             return new DataSourceTransactionManager(new DriverManagerDataSource(

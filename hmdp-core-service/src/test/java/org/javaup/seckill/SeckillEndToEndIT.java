@@ -40,6 +40,7 @@ class SeckillEndToEndIT {
     static ConcurrentMessageListenerContainer<String,String> listener;
     static SeckillStore store; static SeckillTransactions tx; static SeckillFacade facade;
     static SeckillRecovery recovery; static SeckillWorkers workers;
+    static SeckillVoucherBloom bloom; static org.redisson.api.RedissonClient bloomRedis;
     static final Set<Long> testVouchers=ConcurrentHashMap.newKeySet();
     static final String PREFIX="seckill-e2e";
     static final AtomicInteger dbAdmissions=new AtomicInteger();
@@ -67,7 +68,19 @@ class SeckillEndToEndIT {
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
         while(true){try(var c=connection.getConnection()){if("PONG".equals(c.ping()))break;}catch(Exception e){if(System.nanoTime()>deadline)throw e;Thread.sleep(50);}}
         gateway=new RedisAdmissionGateway(redisTemplate,new ObjectMapper(),PREFIX,PREFIX,100000,256);
-        recovery=new SeckillRecovery(store,tx,gateway);ReflectionTestUtils.setField(recovery,"activityZone","UTC");
+        var bloomConfig = new org.redisson.config.Config();
+        bloomConfig.setThreads(2).setNettyThreads(2);
+        bloomConfig.useSingleServer().setAddress("redis://127.0.0.1:"+port).setConnectionMinimumIdleSize(1).setConnectionPoolSize(4);
+        bloomRedis=org.redisson.Redisson.create(bloomConfig);
+        org.javaup.handler.BloomFilterHandler handler;
+        try(var prefix=mockStatic(org.javaup.core.SpringUtil.class)) {
+            prefix.when(org.javaup.core.SpringUtil::getPrefixDistinctionName).thenReturn(PREFIX);
+            handler=new org.javaup.handler.BloomFilterHandler(bloomRedis,"voucher-bloom",100000L,0.01);
+        }
+        var filters=mock(org.javaup.handler.BloomFilterHandlerFactory.class);
+        when(filters.get(org.javaup.constant.Constant.BLOOM_FILTER_HANDLER_VOUCHER)).thenReturn(handler);
+        bloom=new SeckillVoucherBloom(filters,gateway,new SimpleMeterRegistry());
+        recovery=new SeckillRecovery(store,tx,gateway,bloom);ReflectionTestUtils.setField(recovery,"activityZone","UTC");
         var users=mock(IUserInfoService.class);when(users.getByUserId(anyLong())).thenAnswer(call->new UserInfo().setUserId(call.getArgument(0)).setLevel(1));
         var ids=new SnowflakeIdGenerator(21,21);
 
@@ -75,11 +88,11 @@ class SeckillEndToEndIT {
         broker.brokerListProperty("seckill.e2e.bootstrap");broker.brokerProperties(Map.of("group.initial.rebalance.delay.ms","0","offsets.topic.num.partitions","1"));broker.afterPropertiesSet();
         var properties=new KafkaProperties();properties.setBootstrapServers(List.of(broker.getBrokersAsString()));
         var configuration=new SeckillKafkaConfiguration();producer=configuration.seckillV2Template(properties);
-        facade=new SeckillFacade(gateway,tx,store,users,ids,new SeckillAdmissionCache(gateway),new SeckillAdmissionPublisher(producer),256);
+        facade=new SeckillFacade(gateway,tx,store,users,ids,new SeckillAdmissionCache(gateway, bloom),new SeckillAdmissionPublisher(producer),256);
         listener=configuration.seckillV2Factory(properties,producer).createContainer(SeckillAdmissionPublisher.TOPIC);listener.getContainerProperties().setGroupId("e2e-"+UUID.randomUUID());
         var business=configuration.seckillQueuedListener(new SeckillQueuedProcessor(tx,users,60));
         listener.setupMessageListener((AcknowledgingMessageListener<String,String>)(record,ack)->business.listen(record.value(),ack));listener.start();ContainerTestUtils.waitForAssignment(listener,1);
-        var catalog=new SeckillCatalogService(store,tx,ids,mock(DelayQueueContext.class),120);
+        var catalog=new SeckillCatalogService(store,tx,ids,mock(DelayQueueContext.class),120,bloom);
         workers=new SeckillWorkers(store,tx,gateway,recovery,facade,producer,new SimpleMeterRegistry(),catalog);
     }
 
@@ -87,6 +100,7 @@ class SeckillEndToEndIT {
         if(listener!=null)listener.stop();
         if(producer!=null)((DefaultKafkaProducerFactory<?,?>)producer.getProducerFactory()).destroy();
         if(broker!=null)broker.destroy();
+        if(bloomRedis!=null)bloomRedis.shutdown();
         if(connection!=null)connection.destroy();
         if(redisProcess!=null){redisProcess.destroy();if(!redisProcess.waitFor(5,TimeUnit.SECONDS))redisProcess.destroyForcibly();}
         System.clearProperty("seckill.e2e.bootstrap");SeckillShardingIT.stop();
@@ -130,7 +144,7 @@ class SeckillEndToEndIT {
         var failedPublisher=mock(SeckillAdmissionPublisher.class);
         doThrow(new SeckillFailure("DELIVERY_UNCONFIRMED",503)).when(failedPublisher).publish(any(),anyBoolean());
         var disconnected=new SeckillFacade(gateway,tx,store,mock(IUserInfoService.class),
-            new SnowflakeIdGenerator(22,22),new SeckillAdmissionCache(gateway),failedPublisher,256);
+            new SnowflakeIdGenerator(22,22),new SeckillAdmissionCache(gateway, bloom),failedPublisher,256);
         assertEquals("DELIVERY_UNCONFIRMED",assertThrows(SeckillFailure.class,
             ()->disconnected.submit(v,u,"stream-retry",gateway.issueToken(v,u),false)).getCode());
         assertEquals("NOT_FOUND",tx.result(v,u,"stream-retry").status());

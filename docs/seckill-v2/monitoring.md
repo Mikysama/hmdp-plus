@@ -30,3 +30,7 @@
 - 入口 `QUEUED` 延迟测的是缓存/Redis/生产者 ACK；完成延迟必须另统计消费事务与排队时间。
 - 关注 DELIVERY_UNCONFIRMED、QUEUE_EXPIRED、STALE_EPOCH 和 HELD 最老年龄；队列期限默认 60 秒，持续积压应降低入口速率或调整容量与期限，不能把 Kafka ACK 计为成功订单。
 - 物理库锁等待/连接池等待仍要监控；默认 consumer-concurrency=1（每实例），多实例/分区并发需合并计算。后置投影与查询/恢复也消耗数据库容量。
+
+## 新链路布隆过滤器
+
+关注 `seckill_v2_bloom_rejected`、`seckill_v2_bloom_fallback`（reason=unavailable/existing_admission）和 `seckill_v2_bloom_registration_failed`。持续 fallback 表示过滤器异常或漏加载，不应仅凭低拒绝率推断流量正常。创建/恢复登记失败返回 BLOOM_UNAVAILABLE 或保留恢复 RETRY；结果查询不依赖过滤器。

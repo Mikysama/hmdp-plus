@@ -6,7 +6,6 @@ import org.javaup.dto.*;
 import org.javaup.execute.RateLimitHandler;
 import org.javaup.ratelimit.extension.RateLimitScene;
 import org.javaup.seckill.*;
-import org.javaup.seckill.redis.RedisAdmissionGateway;
 import org.javaup.utils.UserHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 public class VoucherOrderController {
   private final SeckillFacade facade;
   private final SeckillTransactions tx;
-  private final RedisAdmissionGateway redis;
   private final SeckillStore store;
   private final RateLimitHandler limit;
   private final SeckillRecovery recovery;
@@ -23,13 +21,11 @@ public class VoucherOrderController {
   public VoucherOrderController(
       SeckillFacade facade,
       SeckillTransactions tx,
-      RedisAdmissionGateway redis,
       SeckillStore store,
       RateLimitHandler limit,
       SeckillRecovery recovery) {
     this.facade = facade;
     this.tx = tx;
-    this.redis = redis;
     this.store = store;
     this.limit = limit;
     this.recovery = recovery;
@@ -48,11 +44,7 @@ public class VoucherOrderController {
   @GetMapping("/seckill/token/{id}")
   public Result<String> token(@PathVariable Long id) {
     limit.execute(id, user(), RateLimitScene.ISSUE_TOKEN);
-    try {
-      return Result.ok(redis.issueToken(id, user()));
-    } catch (RuntimeException e) {
-      throw SeckillFacade.redisFailure(e);
-    }
+    return Result.ok(facade.issueToken(id, user()));
   }
 
   @PostMapping("/seckill/{id}")

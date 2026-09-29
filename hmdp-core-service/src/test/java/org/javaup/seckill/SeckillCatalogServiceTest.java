@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SeckillCatalogServiceTest {
- JdbcTemplate jdbc; SeckillCatalogService catalog; SeckillTransactions tx; DelayQueueContext delays;
+ JdbcTemplate jdbc; SeckillCatalogService catalog; SeckillTransactions tx; DelayQueueContext delays; SeckillVoucherBloom bloom;
  @BeforeEach void setup() throws Exception {
   var ds=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa","");jdbc=new JdbcTemplate(ds);
   jdbc.execute("CREATE TABLE tb_voucher(id BIGINT PRIMARY KEY,shop_id BIGINT,title VARCHAR(255),sub_title VARCHAR(255),rules VARCHAR(1024),pay_value BIGINT,actual_value BIGINT,type INT,status INT,create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
@@ -23,10 +23,25 @@ class SeckillCatalogServiceTest {
   int idx=0; for(String statement:ddl.split(";"))if(!statement.isBlank())jdbc.execute(statement.replaceAll("(?i)(KEY) `([a-z_]+)`", "$1 `$2_"+(idx++)+"`"));
   var store=new SeckillStore(jdbc);tx=new SeckillTransactions(store,new TransactionTemplate(new DataSourceTransactionManager(ds)),60);
   var ids=mock(SnowflakeIdGenerator.class);when(ids.nextId()).thenReturn(101L,102L,103L,104L);delays=mock(DelayQueueContext.class);
-  catalog=new SeckillCatalogService(store,tx,ids,delays,120);
+  bloom=mock(SeckillVoucherBloom.class);
+  catalog=new SeckillCatalogService(store,tx,ids,delays,120,bloom);
+ }
+ @Test void registersBeforeSqlTransactionAndFailureDoesNotCreateRows(){
+  doAnswer(call->{
+   assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+   assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM tb_voucher",Integer.class));
+   throw new SeckillFailure("BLOOM_UNAVAILABLE",503);
+  }).when(bloom).register(101L);
+  assertEquals("BLOOM_UNAVAILABLE",assertThrows(SeckillFailure.class,()->catalog.addSeckill(valid())).getCode());
+  assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM tb_voucher",Integer.class));
+  assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM tb_seckill_voucher",Integer.class));
+ }
+ @Test void successfulCreationRegistersGeneratedVoucherId(){
+  long id=catalog.addSeckill(valid());
+  verify(bloom).register(id);
  }
  SeckillVoucherDto valid(){return new SeckillVoucherDto().setShopId(1L).setTitle("券").setSubTitle("限时").setPayValue(100L).setActualValue(200L).setType(1).setStatus(1).setStock(10).setBeginTime(LocalDateTime.now().plusHours(1)).setEndTime(LocalDateTime.now().plusHours(2));}
- @Test void createsPausedConservedInventoryAndDurableReminderWithoutNetwork(){long id=catalog.addSeckill(valid());var view=catalog.get(id);assertEquals("PAUSED",view.get("admissionState"));assertEquals(10,((Number)view.get("stock")).intValue());assertEquals(0,((Number)view.get("reservedStock")).intValue());assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM tb_seckill_outbox WHERE event_type='REMINDER'",Integer.class));verifyNoInteractions(delays);}
+ @Test void createsPausedConservedInventoryAndDurableReminderWithoutDelayQueueCall(){long id=catalog.addSeckill(valid());var view=catalog.get(id);assertEquals("PAUSED",view.get("admissionState"));assertEquals(10,((Number)view.get("stock")).intValue());assertEquals(0,((Number)view.get("reservedStock")).intValue());assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM tb_seckill_outbox WHERE event_type='REMINDER'",Integer.class));verifyNoInteractions(delays);}
  @Test void rejectsInvalidLevelAndTimeWithoutPartialRows(){var bad=valid().setAllowedLevels("1,bad");assertThrows(SeckillFailure.class,()->catalog.addSeckill(bad));var time=valid();time.setEndTime(time.getBeginTime());assertThrows(SeckillFailure.class,()->catalog.addSeckill(time));assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM tb_voucher",Integer.class));}
  @Test void updateChecksVersionAndMergedMoneyThenFencesAdmission(){long id=catalog.addSeckill(valid());jdbc.update("UPDATE tb_seckill_voucher SET admission_state='OPEN' WHERE voucher_id=?",id);var invalid=new UpdateSeckillVoucherDto().setVoucherId(id).setExpectedVersion(0L).setPayValue(201L);assertThrows(SeckillFailure.class,()->catalog.update(invalid));assertEquals(100L,((Number)catalog.get(id).get("payValue")).longValue());catalog.update(new UpdateSeckillVoucherDto().setVoucherId(id).setExpectedVersion(0L).setStatus(2));var view=catalog.get(id);assertEquals(2,((Number)view.get("status")).intValue());assertEquals("REBUILDING",view.get("admissionState"));assertEquals(1L,((Number)view.get("ruleVersion")).longValue());assertThrows(SeckillFailure.class,()->catalog.update(new UpdateSeckillVoucherDto().setVoucherId(id).setExpectedVersion(0L).setStatus(1)));}
  @Test void shrinkingToZeroIsAllowedAndAdjustmentIsIdempotent(){long id=catalog.addSeckill(valid());jdbc.update("UPDATE tb_seckill_voucher SET admission_state='OPEN' WHERE voucher_id=?",id);var dto=new UpdateSeckillVoucherStockDto().setVoucherId(id).setAdjustmentId("resize").setExpectedVersion(0L).setInitStock(0);catalog.adjust(dto);catalog.adjust(dto);assertEquals(0,((Number)catalog.get(id).get("stock")).intValue());}

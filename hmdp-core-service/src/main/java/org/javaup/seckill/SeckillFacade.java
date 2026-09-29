@@ -40,6 +40,15 @@ public class SeckillFacade {
     this.admission = new Semaphore(concurrency);
   }
 
+  public String issueToken(long voucher, long user) {
+    try {
+      cache.checkExists(voucher);
+      return redis.issueToken(voucher, user);
+    } catch (RuntimeException e) {
+      throw redisFailure(e);
+    }
+  }
+
   public SeckillResult submit(long v, long u, String request, String token, boolean auto) {
     if (request == null || !request.matches("[A-Za-z0-9_-]{1,64}"))
       throw new SeckillFailure("INVALID_REQUEST_ID", 400);

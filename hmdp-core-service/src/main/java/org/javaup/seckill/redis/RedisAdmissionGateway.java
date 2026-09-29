@@ -229,6 +229,11 @@ public class RedisAdmissionGateway {
     return r;
   }
 
+  /** One-key presence probe, not an existence proof or permission to purchase. */
+  public boolean hasAdmission(long voucherId) {
+    return Boolean.TRUE.equals(redis.hasKey(base(voucherId) + ":active"));
+  }
+
   public long activeEpoch(long voucherId) {
     String current = redis.opsForValue().get(base(voucherId) + ":active");
     if (current == null) throw new IllegalStateException("ADMISSION_UNINITIALIZED");

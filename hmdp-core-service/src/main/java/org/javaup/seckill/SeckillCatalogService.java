@@ -25,14 +25,17 @@ public class SeckillCatalogService {
   private final SnowflakeIdGenerator ids;
   private final DelayQueueContext delays;
   private final long reminderAheadSeconds;
+  private final SeckillVoucherBloom bloom;
 
   public SeckillCatalogService(
       SeckillStore store,
       SeckillTransactions tx,
       SnowflakeIdGenerator ids,
       DelayQueueContext delays,
-      @Value("${seckill.reminder.ahead.seconds:120}") long reminderAheadSeconds) {
+      @Value("${seckill.reminder.ahead.seconds:120}") long reminderAheadSeconds,
+      SeckillVoucherBloom bloom) {
     this.store = store;
+    this.bloom = bloom;
     this.tx = tx;
     this.ids = ids;
     this.delays = delays;
@@ -81,6 +84,8 @@ public class SeckillCatalogService {
     validateRules(dto.getBeginTime(), dto.getEndTime(), dto.getAllowedLevels(), dto.getMinLevel());
     if (dto.getStock() == null || dto.getStock() < 0) throw invalid("INVALID_STOCK");
     long id = ids.nextId(), stockId = ids.nextId();
+    // Add before SQL commit: a rollback leaves only a harmless Bloom false positive.
+    bloom.register(id);
     return tx.in(
         () -> {
           insertBase(

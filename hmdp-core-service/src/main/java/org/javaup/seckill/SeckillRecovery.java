@@ -14,14 +14,17 @@ public class SeckillRecovery {
   private final SeckillStore s;
   private final SeckillTransactions tx;
   private final RedisAdmissionGateway redis;
+  private final SeckillVoucherBloom bloom;
 
   @org.springframework.beans.factory.annotation.Value("${seckill.v2.activity-zone:Asia/Shanghai}")
   private String activityZone = "Asia/Shanghai";
 
-  public SeckillRecovery(SeckillStore s, SeckillTransactions tx, RedisAdmissionGateway redis) {
+  public SeckillRecovery(
+      SeckillStore s, SeckillTransactions tx, RedisAdmissionGateway redis, SeckillVoucherBloom bloom) {
     this.s = s;
     this.tx = tx;
     this.redis = redis;
+    this.bloom = bloom;
   }
 
   public void recover(long v) {
@@ -94,6 +97,8 @@ public class SeckillRecovery {
             });
     if (!consistent) throw new SeckillFailure("INVENTORY_INVARIANT", 503);
     try {
+      // No external IO within the database transaction; index before reopening admission.
+      bloom.register(v);
       Inventory i = inventory(snapshot);
       var rows =
           s.jdbc.queryForList(

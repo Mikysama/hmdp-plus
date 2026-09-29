@@ -1,60 +1,76 @@
-# 新秒杀链路布隆过滤器 — 2026-09-29
+# 券详情数据库查询布隆过滤器 — 2026-09-29
 
-## 接入位置
+## 位置与目的
 
-复用既有 `BloomFilterHandlerFactory` 的 `voucher` 过滤器（配置 `bloom-filter.filters.voucher`，expected-insertions=100000、false-probability=0.01），不是为订单用户新建过滤器。
+布隆过滤器保护 `POST /voucher/get → SeckillCatalogService.get()` 的 MySQL 查询。数据库是券信息的权威来源，Redis 没有活动准入数据不代表券不存在。
 
-- 获取秒杀 token：登录及限流后，`SeckillFacade.issueToken()` 检查过滤器，再生成 token。
-- 提交：保留本地并发控制；Caffeine 活动缓存未命中时，先检查过滤器，再加载 Redis 活动元数据。缓存命中不额外访问过滤器。
-- Redis Lua、Kafka、数据库资格/库存校验保持不变；命中过滤器不是活动存在或可购买的充分条件。误判为存在的券仍可能获得 token；实际活动有效性在提交阶段检查，不能声称 token 只会发给真实活动。
-- 请求结果、已购订单和取消接口不经过布隆过滤器，避免影响数据库已持久化业务结果的查询和处理。
+当前详情接口没有详情缓存，实际流程为：
 
-## 负结果和异常处理
+```text
+券详情请求 → 检查数据库券 ID 的 Bloom 索引
+              ├─ 完整可用且为负 → 404 VOUCHER_NOT_FOUND，不执行详情 SQL
+              ├─ 可能存在 → MySQL 查询完整信息，数据库决定是否存在
+              └─ 未就绪或异常 → MySQL 查询完整信息
+```
 
-| 条件 | 行为 |
+若以后增加详情缓存，过滤器应放在缓存未命中后的 SQL 回源之前。本次不引入详情缓存，也不增加秒杀 HTTP 提交的同步 SQL 回源。
+
+- 秒杀提交：Caffeine → Redis 活动元数据/预占 Lua → Kafka，不再检查 Bloom。
+- 获取秒杀 token：不再检查 Bloom；令牌不是活动存在或购买成功的证明。
+- 活动恢复：不依赖 Bloom 登记，不因目录索引不可用而阻止活动重建。
+- 订单结果、取消、Kafka 消费事务保持数据库业务校验，不用 Bloom 负结果覆盖已有订单。
+- 不对所有 SQL 统一套用此检查。按商铺查券列表的参数是 shopId，不能用券 ID Bloom 过滤；写入、事务校验等也不受此详情优化替代。
+
+## 实现与初始化
+
+复用 `BloomFilterHandlerFactory` 的 `voucher` 过滤器，底层为 Redisson `RBloomFilter`，数据存在 Redis。它只表示 ID 的集合，不保存完整券信息。
+
+`BloomFilterDataInit` 委托 `SeckillVoucherBloom.initialize()` 通过 `SeckillStore.catalogVoucherIds()` 对 `tb_voucher` 按 ID 游标分批读取（每批最多 1000），涵盖普通券、秒杀券及未激活的券，而不是只加载 Redis 中已开放的活动。初始化是追加式，不清空现有位图，以免与并发创建冲突。券表的 INLINE 分表规则开启范围查询，支持跨两个数据库、四个物理表的排序分页扫描。
+
+`BloomFilterHandler` 为数据库完整加载维护共享的 `catalog-load` 状态，与位图及 Redisson config 使用相同 Redis Cluster hash slot：
+
+1. 初始化位图后写入唯一 `LOADING:<generation>`。
+2. 逐批加载数据库 ID；普通券和秒杀券的新建路径均在 SQL 事务之前登记 ID。
+3. 仅完整扫描成功、位图及 config 仍存在、generation 未变化时，CAS 更新为 `READY:<generation>`。
+4. 券详情仅在 READY 下采用负结果，并在负结果后重新检查 generation；初始化或丢失期间放行 SQL。
+
+位图/config 缺失会撤销加载状态。单条新增登记、补配置不能将不完整索引变成 READY；必须重新完成数据库 ID 扫描。扫描失败、并发加载代次被替换、扫描中观察到数据丢失，都不能发布旧 READY。空目录使用非券 ID 的内部种子保证位图存在。
+
+## 错误与一致性边界
+
+| 情况 | 行为 |
 | --- | --- |
-| Bloom 返回可能存在 | 继续原有 Redis 活动和 Lua 校验 |
-| Bloom 返回不存在，但当前准入 `:active` 指针存在 | 继续原校验，尽力补登记，防止过滤器单独丢失/漏加载误拒绝有效活动 |
-| Bloom 返回不存在，准入指针也不存在 | 返回 409 `VOUCHER_UNAVAILABLE`，不加载活动元数据、不预占、不写 Stream、不查业务数据库 |
-| Bloom 检查抛异常（配置缺失、Redis 故障等） | 记录 fallback 指标，回到原 Redis 准入路径；原校验仍拒绝数据缺失/不可用，不自动回源 SQL |
+| MySQL 有券，Redis 无活动准入指针或完整详情 | 完整索引命中后查 SQL，详情可正常返回 |
+| 完整索引负结果 | SQL 前返回 404 VOUCHER_NOT_FOUND |
+| Bloom 假阳性或 SQL 写入回滚留下的 ID | 继续查 SQL，由数据库判断，不虚构券信息 |
+| Redis/Bloom 异常、加载未完成、加载代次改变 | 放行详情 SQL，记录 fallback |
+| 新券登记失败 | 503 BLOOM_UNAVAILABLE，尚未写入券的业务行 |
+| 索引丢失后仅登记部分 ID | 保持未就绪，完整数据库重载前不拒绝负结果 |
 
-`VOUCHER_UNAVAILABLE` 不声称数据库中绝对不存在该券。Bloom 与活动数据都被删除时，合法券也可能在后台恢复前暂不可用。
+本次不增加后台自动重建任务。故障排除后重启实例触发全量 ID 重载；重载完成前，详情走 SQL。应在入口保留现有限流，并监控降级期间的数据库压力。
 
-安全代价：负结果仍需一次轻量 Redis 指针探测。此过滤器由 Redisson 存在 Redis 中，不是无网络成本的本地过滤器；不能宣称每个无效 ID 都比旧路径少一次 Redis 请求。主要提供显式存在性过滤、减少无效 token 创建，以及在 Bloom 正常时提前结束后续流程。负结果不缓存为永久不存在。
+所有新券必须经由登记后提交的写入路径。直接 SQL 导入、旧版本绕过登记写入、外部工具对位图做部分覆盖等不满足此前提；这类操作必须先停用负结果过滤，并重新全量加载。部署要求 noeviction，避免写入期间单独淘汰位图而留下旧加载状态。存在性探测与 Redisson add 并非同一个原子操作，不支持并发写入期间外部删除/重建部分键；此类操作必须先停写并撤销加载状态。不得对位图/config/加载状态进行独立恢复或设置独立过期；恢复与运维操作应按整套索引处理。Redis 的持久化、复制及故障丢失窗口仍存在，不能把 Bloom 当作数据库一致性约束。
 
-## 创建、初始化和恢复
-
-- 沿用 `BloomFilterDataInit` 的启动批量加载。
-- `SeckillCatalogService.addSeckill()` 校验参数后，在 SQL 事务之前登记新券 ID；登记失败返回 503 `BLOOM_UNAVAILABLE`，尚未写入业务行。
-- 登记后 SQL 失败可能留下过滤器假阳性。不得删除该券对应位，因为可能与其他 ID 共用位；后续真实 Redis 和数据库校验仍然有效。
-- `SeckillRecovery` 从数据库验证快照后、在重建/激活 Redis 前补登记；网络 IO 不放在数据库事务内。登记失败保存恢复 RETRY 状态，不开放活动。
-- `BloomFilterHandler.ensureInitializedAndAdd()` 先 tryInit 再 add，支持 Redis 配置丢失后的恢复，不清空现有过滤器。
-
-不改变已有 MySQL 表、消息版本或 Redis 准入命名空间，无额外 DDL。原有一人一单、库存约束、Outbox 幂等与 epoch 隔离仍是最终业务保护。
+数据库可能包含比预计更多的 ID，应监控过滤器容量并按需规划重建；本次不实现自动扩容或在线替换。Bloom 检查本身访问 Redis，只能减少无效详情请求的 SQL，不能据此宣称 Redis 请求次数减少或秒杀吞吐提升。
 
 ## 指标
 
-- `seckill_v2_bloom_rejected`：负结果且无活动指针的拒绝次数。
-- `seckill_v2_bloom_fallback{reason=unavailable|existing_admission}`：检查异常降级，或已有活动绕过负结果。
-- `seckill_v2_bloom_registration_failed`：创建/恢复/补登记失败。
+- `seckill_v2_bloom_rejected`：详情查询在 SQL 前被拒绝的次数。
+- `seckill_v2_bloom_fallback{reason=unavailable|not_ready}`：异常或未就绪时允许查询 SQL。
+- `seckill_v2_bloom_initialization_failed`：全量初始化未完成，包括代次被替换。
+- `seckill_v2_bloom_registration_failed`：新建券的登记失败。
 
-过滤器接近预计容量或假阳性明显增多时，应规划重建和容量调整；本次不实现自动扩容或在线过滤器切换。
+## 验证
 
-## 验证结果
-
-2026-09-29 将仅含布隆过滤器改动的待提交版本导出至独立目录，完成以下验证，仅使用临时服务，没有连接或修改业务数据库：
+回归覆盖数据库有券但无 Redis 准入数据、负结果不执行详情 SQL、假阳性回源、初始化失败、部分登记、位图/config 丢失、重载代次隔离、新建登记以及秒杀预占/Stream 不依赖 Bloom。真实 Redis/Redisson 与 SQL 测试验证加载状态，不只模拟接口返回值。
 
 ```bash
 bash scripts/run-seckill-v2-mysql-tests.sh -Dmaven.repo.local=.m2/repository \
-  '-Dtest=InventoryTest,Seckill*Test,SeckillShardingIT,SeckillEndToEndIT'
+  '-Dtest=InventoryTest,Seckill*Test,UploadSecurityTest,SeckillShardingIT,SeckillEndToEndIT'
 python3 -m unittest discover -s tests/redis_v2 -p 'test_*.py'
 python3 -m unittest discover -s sql/v2 -p 'test_*.py'
 ```
 
-- 待提交版本 Java 回归 161 项：160 通过、1 个可选负载测试跳过，0 失败/错误，BUILD SUCCESS。包括双物理 MySQL 分片、真实 Redis/Redisson Bloom、Kafka KRaft 端到端测试。
-- Redis Lua 协议 44 项通过；离线迁移 12 项通过。两个临时 MySQL 实例的已有升级校验也通过。
-- 布隆专用测试覆盖负结果拒绝、假阳性继续真实校验、位图丢失与补登记、配置丢失降级及重新初始化、活动结束后的原请求重试；创建/恢复登记失败及恢复重试；结果查询不依赖过滤器；Caffeine 热命中不重复查过滤器。
-- 端到端测试使用真实布隆过滤器接入创建/恢复和提交路径，保留 Stream 补投、幂等建单、超时及取消恢复回归。
-- 独立代码复核未发现阻塞问题。待提交版本验证日志 `/tmp/seckill-bloom-staged-tests.log`，任务开始前快照 `/tmp/hmdp-before-bloom-20260929.tar.gz`。此前包含工作区原有验收及安全改动的完整回归为 169 项（168 通过、1 跳过），日志 `/tmp/seckill-bloom-full.log`。
+测试使用临时 Redis、MySQL 和 Kafka 服务，不连接业务环境。不以功能回归代替生产容量压测。
 
-本次未运行生产容量压测，不据此宣称入口吞吐提升。提交仅包含布隆过滤器接入、相关测试和文档；工作区原有验收和安全改动保留，未部署生产环境。
+2026-09-29 本次工作区验证：Java 180 项（179 通过、1 个可选负载测试跳过），0 失败/错误；Redis Lua 44 项通过；离线迁移 12 项通过。包含真实双 MySQL 分片的目录分页、Bloom 完整初始化、缺少 Redis 准入数据的详情查询，以及原有 Kafka/Stream 和订单生命周期回归。Java 日志 `/tmp/bloom-db-full.log`。此数字包含工作区已有的验收/安全测试，不是仅本次新增测试数。

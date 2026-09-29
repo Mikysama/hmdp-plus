@@ -26,6 +26,13 @@ class SeckillCatalogServiceTest {
   bloom=mock(SeckillVoucherBloom.class);
   catalog=new SeckillCatalogService(store,tx,ids,delays,120,bloom);
  }
+ @Test void negativeBloomStopsDetailLookupBeforeAnySql(){
+  var database=mock(SeckillStore.class);
+  var guarded=new SeckillCatalogService(database,tx,mock(SnowflakeIdGenerator.class),delays,120,bloom);
+  doThrow(new SeckillFailure("VOUCHER_NOT_FOUND",404)).when(bloom).check(999);
+  assertEquals("VOUCHER_NOT_FOUND",assertThrows(SeckillFailure.class,()->guarded.get(999)).getCode());
+  verifyNoInteractions(database);
+ }
  @Test void registersBeforeSqlTransactionAndFailureDoesNotCreateRows(){
   doAnswer(call->{
    assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
@@ -39,6 +46,17 @@ class SeckillCatalogServiceTest {
  @Test void successfulCreationRegistersGeneratedVoucherId(){
   long id=catalog.addSeckill(valid());
   verify(bloom).register(id);
+ }
+ @Test void ordinaryCreationRegistersBeforeCommitting(){
+  var dto=new VoucherDto().setShopId(1L).setTitle("ordinary").setSubTitle("s").setRules("r").setPayValue(1L).setActualValue(2L).setType(0).setStatus(1);
+  doAnswer(call->{
+   assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+   assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM tb_voucher",Integer.class));
+   return null;
+  }).when(bloom).register(101L);
+  assertEquals(101L,catalog.addOrdinary(dto));
+  verify(bloom).register(101L);
+  assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM tb_voucher",Integer.class));
  }
  SeckillVoucherDto valid(){return new SeckillVoucherDto().setShopId(1L).setTitle("券").setSubTitle("限时").setPayValue(100L).setActualValue(200L).setType(1).setStatus(1).setStock(10).setBeginTime(LocalDateTime.now().plusHours(1)).setEndTime(LocalDateTime.now().plusHours(2));}
  @Test void createsPausedConservedInventoryAndDurableReminderWithoutDelayQueueCall(){long id=catalog.addSeckill(valid());var view=catalog.get(id);assertEquals("PAUSED",view.get("admissionState"));assertEquals(10,((Number)view.get("stock")).intValue());assertEquals(0,((Number)view.get("reservedStock")).intValue());assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM tb_seckill_outbox WHERE event_type='REMINDER'",Integer.class));verifyNoInteractions(delays);}

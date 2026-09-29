@@ -27,13 +27,11 @@ class SeckillFacadeTest {
   }
 
   @Test
-  void bloomRejectedVoucherCannotAllocateAToken() {
+  void tokenIssuanceDoesNotConsultDetailBloomOrDatabase() {
     var f = facade();
-    doThrow(new SeckillFailure("VOUCHER_UNAVAILABLE", 409)).when(cache).checkExists(999);
-    assertEquals("VOUCHER_UNAVAILABLE", assertThrows(SeckillFailure.class,
-        () -> f.issueToken(999, 7)).getCode());
-    verify(redis, never()).issueToken(anyLong(), anyLong());
-    verifyNoInteractions(store, tx, users, publisher);
+    when(redis.issueToken(1, 7)).thenReturn("token");
+    assertEquals("token", f.issueToken(1, 7));
+    verifyNoInteractions(cache, store, tx, users, publisher);
   }
 
   @Test

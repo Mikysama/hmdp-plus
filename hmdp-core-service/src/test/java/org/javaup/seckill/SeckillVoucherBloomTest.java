@@ -5,62 +5,82 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import org.javaup.handler.BloomFilterHandler;
 import org.javaup.handler.BloomFilterHandlerFactory;
-import org.javaup.seckill.redis.RedisAdmissionGateway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SeckillVoucherBloomTest {
   final BloomFilterHandler filter = mock(BloomFilterHandler.class);
   final BloomFilterHandlerFactory factory = mock(BloomFilterHandlerFactory.class);
-  final RedisAdmissionGateway redis = mock(RedisAdmissionGateway.class);
+  final SeckillStore store = mock(SeckillStore.class);
   SeckillVoucherBloom bloom;
 
   @BeforeEach void setup() {
     when(factory.get(BLOOM_FILTER_HANDLER_VOUCHER)).thenReturn(filter);
-    bloom = new SeckillVoucherBloom(factory, redis, new SimpleMeterRegistry());
+    when(filter.loadedGeneration()).thenReturn("READY:g1");
+    bloom = new SeckillVoucherBloom(factory, store, new SimpleMeterRegistry());
   }
 
-  @Test void negativeAndNoAdmissionRejectsBeforeActivityLoading() {
-    var cache = new SeckillAdmissionCache(redis, bloom);
-    var failure = assertThrows(SeckillFailure.class, () -> cache.check(999, 7, "request"));
-    assertEquals("VOUCHER_UNAVAILABLE", failure.getCode());
-    verify(redis, never()).activity(anyLong());
-    verify(redis, never()).findReservation(anyLong(), anyLong(), anyString());
+  @Test void completeIndexNegativeRejectsBeforeDatabaseAccess() {
+    assertEquals("VOUCHER_NOT_FOUND", assertThrows(SeckillFailure.class, () -> bloom.check(999)).getCode());
+    verifyNoInteractions(store);
   }
 
-  @Test void bloomPositiveStillRequiresRealActivityAndLuaChecks() {
+  @Test void positiveIsOnlyAHintAndDoesNotReadDatabaseInsideGuard() {
     when(filter.contains("1")).thenReturn(true);
-    when(redis.activity(1)).thenThrow(new IllegalStateException("ADMISSION_UNINITIALIZED"));
-    assertThrows(IllegalStateException.class,
-        () -> new SeckillAdmissionCache(redis, bloom).check(1, 7, "request"));
-    verify(redis).activity(1);
-    verify(redis, never()).hasAdmission(anyLong());
+    assertDoesNotThrow(() -> bloom.check(1));
+    verifyNoInteractions(store);
   }
 
-  @Test void missingBloomEntryDoesNotRejectAnExistingActivityAndIsRepaired() {
-    when(redis.hasAdmission(1)).thenReturn(true);
-    when(redis.activity(1)).thenReturn(new RedisAdmissionGateway.Activity("1", 0, Long.MAX_VALUE));
-    assertDoesNotThrow(() -> new SeckillAdmissionCache(redis, bloom).check(1, 7, "request"));
-    verify(filter).ensureInitializedAndAdd("1");
+  @Test void uninitializedIndexDoesNotRejectUncachedDatabaseVoucher() {
+    when(filter.loadedGeneration()).thenReturn(null);
+    assertDoesNotThrow(() -> bloom.check(1));
+    verify(filter, never()).contains(anyString());
   }
 
-  @Test void filterFailureFallsBackToOriginalRedisPath() {
-    when(filter.contains("1")).thenThrow(new IllegalStateException("missing bloom config"));
-    when(redis.activity(1)).thenReturn(new RedisAdmissionGateway.Activity("1", 0, Long.MAX_VALUE));
-    assertDoesNotThrow(() -> new SeckillAdmissionCache(redis, bloom).check(1, 7, "request"));
-  }
-
-  @Test void repairFailureDoesNotRejectExistingActivity() {
-    when(redis.hasAdmission(1)).thenReturn(true);
-    doThrow(new IllegalStateException("bloom unavailable")).when(filter).ensureInitializedAndAdd("1");
+  @Test void unavailableFilterFallsBackToDatabasePath() {
+    when(filter.loadedGeneration()).thenThrow(new IllegalStateException("Redis unavailable"));
     assertDoesNotThrow(() -> bloom.check(1));
   }
 
-  @Test void registrationFailureIsExplicitSoCreationCannotCommitAnUnindexedVoucher() {
+  @Test void changedGenerationDuringNegativeCheckCannotReject() {
+    when(filter.loadedGeneration()).thenReturn("READY:g1", "READY:g2");
+    assertDoesNotThrow(() -> bloom.check(1));
+  }
+
+  @Test void initializationPagesDatabaseIdsBeforeMarkingComplete() {
+    when(filter.beginLoad()).thenReturn("g1");
+    when(store.catalogVoucherIds(0, 1000)).thenReturn(List.of(1L, 3L));
+    when(store.catalogVoucherIds(3, 1000)).thenReturn(List.of());
+    when(filter.completeLoad("g1")).thenReturn(true);
+    assertTrue(bloom.initialize());
+    var ordered = inOrder(filter, store);
+    ordered.verify(filter).beginLoad();
+    ordered.verify(store).catalogVoucherIds(0, 1000);
+    ordered.verify(filter).ensureInitializedAndAdd("1");
+    ordered.verify(filter).ensureInitializedAndAdd("3");
+    ordered.verify(store).catalogVoucherIds(3, 1000);
+    ordered.verify(filter).completeLoad("g1");
+  }
+
+  @Test void failedDatabaseScanCannotMarkIndexComplete() {
+    when(filter.beginLoad()).thenReturn("g1");
+    when(store.catalogVoucherIds(0, 1000)).thenThrow(new IllegalStateException("SQL unavailable"));
+    assertFalse(bloom.initialize());
+    verify(filter, never()).completeLoad(anyString());
+  }
+
+  @Test void lostGenerationCannotBePublishedAsComplete() {
+    when(filter.beginLoad()).thenReturn("g1");
+    when(store.catalogVoucherIds(0, 1000)).thenReturn(List.of());
+    when(filter.completeLoad("g1")).thenReturn(false);
+    assertFalse(bloom.initialize());
+  }
+
+  @Test void registrationFailurePreventsCommitOfUnindexedVoucher() {
     doThrow(new IllegalStateException("down")).when(filter).ensureInitializedAndAdd("1");
-    assertEquals("BLOOM_UNAVAILABLE",
-        assertThrows(SeckillFailure.class, () -> bloom.register(1)).getCode());
+    assertEquals("BLOOM_UNAVAILABLE", assertThrows(SeckillFailure.class, () -> bloom.register(1)).getCode());
   }
 }

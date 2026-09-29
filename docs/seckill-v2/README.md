@@ -1,6 +1,6 @@
 # 秒杀实现与验收：Kafka 前置（2026-09-24）
 
-当前主链路为 **Caffeine → Redis → Kafka → MySQL**。Caffeine 活动缓存只从 Redis 加载；缓存未命中时先检查优惠券布隆过滤器，获取 token 时也检查，Redis Lua 原子预扣资格；HTTP 请求不读取会员、不查询或写入业务数据库，等待 Kafka broker 确认后返回 `QUEUED`。Kafka 消费端读取会员资料，再在同券本地事务中完成资格校验、库存预占、建单和转成交。数据库提交后才有 `SUCCEEDED`。
+当前主链路为 **Caffeine → Redis → Kafka → MySQL**。Caffeine 活动缓存只从 Redis 加载，Redis Lua 原子预扣资格；HTTP 请求不读取会员、不查询或写入业务数据库，等待 Kafka broker 确认后返回 `QUEUED`。Kafka 消费端读取会员资料，再在同券本地事务中完成资格校验、库存预占、建单和转成交。数据库提交后才有 `SUCCEEDED`。
 
 新消息使用 `seckill-admission-v4`，schemaVersion=4，固定 eventId 与完整 reservation 身份，消息 key=voucherId。启用 acks=all、幂等生产者，业务幂等依赖数据库。发送超时返回 `503 DELIVERY_UNCONFIRMED`，不返还资格，Redis Stream 后台自动补投，客户端查询/重试仍复用原 requestId；仅 Kafka ACK 不是购买成功保证。
 
@@ -16,7 +16,7 @@
 | --- | --- |
 | `SeckillFacade` | Caffeine → Redis → Kafka 热入口、有界生产并发；独立查询和订阅候选人处理 |
 | `SeckillAdmissionCache/Publisher` | Redis-only Caffeine 加载、等待 Kafka ACK、保留发送不确定性 |
-| `SeckillVoucherBloom` | 券 ID 存在性过滤、负结果活动指针保护、新建及恢复登记 |
+| `SeckillVoucherBloom` | 券详情 SQL 前的 ID 存在性过滤、数据库全量 ID 初始化、新建登记及未就绪降级 |
 | `SeckillQueuedProcessor` | 消费端会员快照，调用原子受理建单 |
 | `SeckillTransactions` | 受理、建单、终止、取消、调配额、订阅；仅同券 SQL |
 | `SeckillRecovery` | 持久化冻结/代次/租约/快照/激活、数据库与投影对账 |
@@ -106,4 +106,4 @@ cd hmdp-vue3 && npm test && npm run build
 
 Redis 预占同时写入 Outbox Stream，后台在 Kafka ACK 后删除消息；详见 [投递机制与上线约束](redis-outbox-stream.md)。
 
-新链路布隆过滤器的位置、降级边界与初始化策略见 [布隆准入说明](bloom-admission.md)。
+券详情查询在访问 MySQL 前检查数据库券 ID 布隆索引；秒杀提交、令牌、恢复和订单结果不经过此过滤器。详情查询目前直接读 SQL，不新增详情缓存。位置、降级边界与初始化策略见 [数据库查询布隆过滤说明](bloom-admission.md)。

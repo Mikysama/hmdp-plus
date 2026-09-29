@@ -229,6 +229,7 @@ rules:
         type: INLINE
         props:
           algorithm-expression: tb_voucher_${id.intdiv(2) % 2}
+          allow-range-query-with-inline-sharding: true
       databaseVoucherOrderModModel:
         type: MOD
         props:

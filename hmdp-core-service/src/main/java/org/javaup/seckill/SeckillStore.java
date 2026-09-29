@@ -47,6 +47,12 @@ public class SeckillStore {
         "db_now");
   }
 
+  /** All catalog IDs, including ordinary and inactive vouchers, for the existence index. */
+  public List<Long> catalogVoucherIds(long after, int count) {
+    return jdbc.queryForList(
+        "SELECT id FROM tb_voucher WHERE id>? ORDER BY id LIMIT ?", Long.class, after, count);
+  }
+
   public List<Long> vouchers(long after, int count) {
     return jdbc.queryForList(
         "SELECT voucher_id FROM tb_seckill_voucher WHERE voucher_id>? ORDER BY voucher_id LIMIT ?",

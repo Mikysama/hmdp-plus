@@ -42,7 +42,6 @@ public class SeckillFacade {
 
   public String issueToken(long voucher, long user) {
     try {
-      cache.checkExists(voucher);
       return redis.issueToken(voucher, user);
     } catch (RuntimeException e) {
       throw redisFailure(e);

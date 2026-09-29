@@ -10,27 +10,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class SeckillAdmissionCache {
   private final RedisAdmissionGateway redis;
-  private final SeckillVoucherBloom bloom;
   private final Cache<Long, RedisAdmissionGateway.Activity> activities =
       Caffeine.newBuilder().maximumSize(10000).expireAfterWrite(Duration.ofSeconds(1)).build();
 
-  public SeckillAdmissionCache(RedisAdmissionGateway redis, SeckillVoucherBloom bloom) {
+  public SeckillAdmissionCache(RedisAdmissionGateway redis) {
     this.redis = redis;
-    this.bloom = bloom;
-  }
-
-  public void checkExists(long voucher) {
-    bloom.check(voucher);
   }
 
   public void check(long voucher, long user, String request) {
-    var activity =
-        activities.get(
-            voucher,
-            id -> {
-              bloom.check(id);
-              return redis.activity(id);
-            });
+    var activity = activities.get(voucher, redis::activity);
     long now = System.currentTimeMillis();
     String reason =
         !"1".equals(activity.status()) && !"ACTIVE".equals(activity.status())

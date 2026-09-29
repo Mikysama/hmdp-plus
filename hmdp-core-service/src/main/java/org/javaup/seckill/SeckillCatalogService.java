@@ -54,6 +54,7 @@ public class SeckillCatalogService {
         dto.getStatus(),
         0);
     long id = ids.nextId();
+    bloom.register(id);
     return tx.in(
         () -> {
           insertBase(
@@ -143,6 +144,7 @@ public class SeckillCatalogService {
   }
 
   public Map<String, Object> get(long voucherId) {
+    bloom.check(voucherId);
     var stock = store.voucher(voucherId, false);
     var base = store.one("SELECT * FROM tb_voucher WHERE id=?", voucherId);
     if (base == null) throw new SeckillFailure("VOUCHER_NOT_FOUND", 404);

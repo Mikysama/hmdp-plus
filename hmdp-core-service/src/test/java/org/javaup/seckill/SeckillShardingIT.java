@@ -80,6 +80,12 @@ class SeckillShardingIT {
                 voucher, voucher + 1, 1, 0, System.currentTimeMillis(), "HELD");
     }
 
+    @Test void catalogBloomScanPaginatesAcrossAllFourPhysicalRoutes() {
+        for (long voucher=8300; voucher<8304; voucher++) seed(voucher);
+        assertEquals(java.util.List.of(8300L,8301L),store.catalogVoucherIds(8299,2));
+        assertEquals(java.util.List.of(8302L,8303L),store.catalogVoucherIds(8301,2));
+    }
+
     @Test void successfulLifecycleStaysOnOnePhysicalShardForAllFourRoutes() {
         for (long voucher = 8400; voucher < 8404; voucher++) {
             long order = voucher + 101;
